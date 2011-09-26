@@ -20,6 +20,7 @@ def _fetch(url, data = None, cached = True, ungzip = True):
     request = urllib2.Request(url)
     request.add_header('Accept-encoding', 'gzip')
     request.add_header('User-agent', USER_AGENT)
+    #print url
     f = urllib2.urlopen(request, data)
     data = f.read()
     if ungzip and f.headers.get('content-encoding', '') == 'gzip':
@@ -32,7 +33,7 @@ def get_font_data(url):
     try:
         info = _fetch(url + 'md5sum')
     except Exception, e:
-        print e
+        #print e
         return
     
     font_data = {}
@@ -49,18 +50,18 @@ if __name__ == "__main__":
     # fetched the listing of a mercurial repo...
     
     families = re.findall(r'<li><a href="([^"]+/)"', page)
-    
+
     font_data = []
     for family_url in families:
-        print 'fetching', family_url
+        #print 'fetching', family_url
         data = get_font_data(WEBFONTS + family_url)
+        #print data
         if not data:
-            print "Couldn't find data from", family_url
+            # print "Couldn't find data from", family_url
             continue
         
         font_data.extend(data.items())
-    
-    print "%d fonts found" % len(font_data)
+    #print "%d fonts found" % len(font_data)
     
     # I could just do this with map if I didn't want nice linebreaks. ;_;
     out = []
@@ -73,10 +74,10 @@ if __name__ == "__main__":
             types = ''
         if types:
             types = ':' + types
-        o = "'%s' => '%s%s', " % (family, family.replace(' ', '+'), types)
+        o = "%s : \"%s%s\", " % (family, family.replace(' ', '+'), types)
         line_length = line_length + len(o)
         if line_length > 90:
-            out.append("\n")
+            #out.append("")
             line_length = len(o)
         out.append(o)
-    print ''.join(out)
+    print '{' + ''.join(out) + '}'
