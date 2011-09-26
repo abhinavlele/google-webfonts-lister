@@ -74,7 +74,7 @@ if __name__ == "__main__":
             types = ''
         if types:
             types = ':' + types
-        o = "%s : \"%s%s\", " % (family, family.replace(' ', '+'), types)
+        o = "\"%s\" : \"%s%s\", " % (family, family.replace(' ', '+'), types)
         line_length = line_length + len(o)
         if line_length > 90:
             #out.append("")
