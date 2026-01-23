@@ -1,2 +1,2 @@
 #!/bin/bash
-exec ~/.claude/hooks/wrappers/run_background.sh ~/.claude/hooks/subagent_stop.py
+exec .claude/hooks/wrappers/run_background.sh .claude/hooks/subagent_stop.py

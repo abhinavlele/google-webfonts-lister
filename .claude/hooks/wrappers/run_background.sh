@@ -17,6 +17,9 @@ HOOK_NAME=$(basename "$HOOK_SCRIPT" .py)
 VENV_PYTHON="$HOME/.claude/hooks/.venv/bin/python3"
 if [[ -x "$VENV_PYTHON" ]]; then
     PYTHON="$VENV_PYTHON"
+elif [[ -x ".claude/hooks/.venv/bin/python3" ]]; then
+    # Fallback to relative path for synced projects without global install
+    PYTHON=".claude/hooks/.venv/bin/python3"
 else
     PYTHON="python3"
 fi
