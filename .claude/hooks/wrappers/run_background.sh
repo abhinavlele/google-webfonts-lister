@@ -27,10 +27,17 @@ TMPFILE=$(mktemp "/tmp/claude_hook_${HOOK_NAME}_XXXXXX.json")
 # Capture stdin
 cat > "$TMPFILE"
 
-# Run the hook in background, clean up temp file when done
+# Fully detach the hook process so it doesn't block Claude exit
+# Uses double-fork pattern for daemon-style detachment (works on macOS/Linux)
+# - First subshell backgrounds and exits immediately
+# - Second subshell runs the actual work, fully orphaned
+# - nohup: Survives parent exit (SIGHUP immunity)
+# - Redirect all fds to /dev/null to prevent blocking
 (
-    "$PYTHON" "$HOOK_SCRIPT" < "$TMPFILE" 2>/dev/null
-    rm -f "$TMPFILE"
+    (
+        nohup "$PYTHON" "$HOOK_SCRIPT" < "$TMPFILE" >/dev/null 2>&1
+        rm -f "$TMPFILE"
+    ) &
 ) &
 
 # Exit immediately
