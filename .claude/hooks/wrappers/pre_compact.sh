@@ -1,2 +1,2 @@
 #!/bin/bash
-exec ~/.claude/hooks/wrappers/run_background.sh ~/.claude/hooks/pre_compact.py
+exec .claude/hooks/wrappers/run_background.sh .claude/hooks/pre_compact.py
