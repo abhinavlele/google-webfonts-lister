@@ -1,16 +1,11 @@
 {
-  "allowedTools": [
-    "Bash(git worktree:*)",
-    "Bash(git add:*)",
-    "Bash(git commit:*)"
-  ],
   "hooks": {
     "SessionStart": [
       {
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/wrappers/session_start.sh"
+            "command": "~/.claude/hooks/wrappers/session_start.sh"
           }
         ]
       }
@@ -20,7 +15,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/wrappers/user_prompt_submit.sh"
+            "command": "~/.claude/hooks/wrappers/user_prompt_submit.sh"
           }
         ]
       }
@@ -30,7 +25,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/wrappers/pre_tool_use.sh"
+            "command": "~/.claude/hooks/wrappers/pre_tool_use.sh"
           }
         ]
       }
@@ -40,7 +35,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/wrappers/post_tool_use.sh"
+            "command": "~/.claude/hooks/wrappers/post_tool_use.sh"
           }
         ]
       }
@@ -50,7 +45,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/wrappers/permission_request.sh"
+            "command": "~/.claude/hooks/wrappers/permission_request.sh"
           }
         ]
       }
@@ -60,7 +55,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/wrappers/notification.sh"
+            "command": "~/.claude/hooks/wrappers/notification.sh"
           }
         ]
       }
@@ -70,7 +65,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/wrappers/stop.sh"
+            "command": "~/.claude/hooks/wrappers/stop.sh"
           }
         ]
       }
@@ -80,7 +75,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/wrappers/subagent_stop.sh"
+            "command": "~/.claude/hooks/wrappers/subagent_stop.sh"
           }
         ]
       }
@@ -90,7 +85,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/wrappers/pre_compact.sh"
+            "command": "~/.claude/hooks/wrappers/pre_compact.sh"
           }
         ]
       }
@@ -100,7 +95,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/wrappers/session_end.sh"
+            "command": "~/.claude/hooks/wrappers/session_end.sh"
           }
         ]
       }
