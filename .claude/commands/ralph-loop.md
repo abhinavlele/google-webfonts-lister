@@ -72,12 +72,23 @@ ralph.start_loop(
 
 ## After Initialization
 
-1. **Confirm the loop is active** by reading back the state
-2. **Show the user** what you understood:
-   - Task to complete
-   - Completion criteria
-   - Max iterations
-3. **Begin working** on the task immediately
+Confirm the loop is active and show the user the configuration:
+
+```python
+# After calling start_loop(), verify it's active:
+state = ralph.get_state()  # NOTE: Use get_state(), NOT get_status()
+
+if state.get('active'):
+    print("Ralph loop initialized successfully!")
+    print(f"  Task: {state.get('prompt', 'unknown')[:100]}...")
+    print(f"  Max iterations: {state.get('max_iterations', 'unlimited')}")
+    print(f"  Completion promise: {state.get('completion_promise', 'COMPLETE')}")
+    print(f"  Working directory: {state.get('working_directory', os.getcwd())}")
+else:
+    print("ERROR: Ralph loop failed to initialize")
+```
+
+Then begin working on the task immediately.
 
 ## Each Iteration: Fresh Context Approach
 
