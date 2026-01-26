@@ -1,2 +1,4 @@
 #!/bin/bash
-exec .claude/hooks/wrappers/run_background.sh .claude/hooks/user_prompt_submit.py
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+HOOKS_DIR="$(dirname "$SCRIPT_DIR")"
+exec "$SCRIPT_DIR/run_background.sh" "$HOOKS_DIR/user_prompt_submit.py"

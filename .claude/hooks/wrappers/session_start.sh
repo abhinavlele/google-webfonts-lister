@@ -1,2 +1,4 @@
 #!/bin/bash
-exec .claude/hooks/wrappers/run_background.sh .claude/hooks/session_start.py
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+HOOKS_DIR="$(dirname "$SCRIPT_DIR")"
+exec "$SCRIPT_DIR/run_background.sh" "$HOOKS_DIR/session_start.py"
