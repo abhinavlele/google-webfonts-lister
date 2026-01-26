@@ -13,13 +13,17 @@
 HOOK_SCRIPT="$1"
 HOOK_NAME=$(basename "$HOOK_SCRIPT" .py)
 
+# Determine hooks directory from this script's location (works from any CWD)
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+HOOKS_DIR="$(dirname "$SCRIPT_DIR")"
+
 # Use venv Python if available (has langfuse installed)
 VENV_PYTHON="$HOME/.claude/hooks/.venv/bin/python3"
 if [[ -x "$VENV_PYTHON" ]]; then
     PYTHON="$VENV_PYTHON"
-elif [[ -x ".claude/hooks/.venv/bin/python3" ]]; then
-    # Fallback to relative path for synced projects without global install
-    PYTHON=".claude/hooks/.venv/bin/python3"
+elif [[ -x "$HOOKS_DIR/.venv/bin/python3" ]]; then
+    # Fallback to project's venv using absolute path (works from any CWD)
+    PYTHON="$HOOKS_DIR/.venv/bin/python3"
 else
     PYTHON="python3"
 fi
