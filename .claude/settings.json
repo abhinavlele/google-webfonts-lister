@@ -2,6 +2,28 @@
   "allowedTools": [
     "Bash(git worktree:*)",
     "Bash(git add:*)",
-    "Bash(git commit:*)"
-  ]
+    "Bash(git commit:*)",
+    "Bash(git fetch:*)"
+  ],
+  "permissions": {
+    "allow": [
+      "Bash(gh pr view*)",
+      "Bash(gh pr list*)",
+      "Bash(gh pr diff*)",
+      "Bash(gh pr checks*)",
+      "Bash(gh pr status*)",
+      "Bash(gh pr create*)",
+      "Bash(gh pr comment*)",
+      "Bash(gh issue view*)",
+      "Bash(gh issue list*)",
+      "Bash(gh issue status*)",
+      "Bash(gh issue create*)",
+      "Bash(gh repo view*)",
+      "Bash(gh repo list*)",
+      "Bash(gh api*)",
+      "Bash(gh run view*)",
+      "Bash(gh run list*)",
+      "Bash(gh search*)"
+    ]
+  }
 }
