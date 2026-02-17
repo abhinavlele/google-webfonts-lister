@@ -3,7 +3,13 @@
     "Bash(git worktree:*)",
     "Bash(git add:*)",
     "Bash(git commit:*)",
-    "Bash(git fetch:*)"
+    "Bash(git fetch:*)",
+    "Bash(bundle exec:*)",
+    "Bash(bundle install*)",
+    "Bash(ruby:*)",
+    "Bash(rake:*)",
+    "Bash(rspec:*)",
+    "Bash(rubocop:*)"
   ],
   "permissions": {
     "allow": [

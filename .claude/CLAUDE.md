@@ -1,6 +1,29 @@
 ```markdown
 # Claude Code Configuration
 
+## Workflow Expectations
+
+When shown an error, warning, or bug report:
+1. **ANALYZE FIRST** - explain the root cause and wait for direction
+2. **Don't autonomously expand scope** - "investigate this" ≠ "implement 8 fixes and create a PR"
+3. **Ask clarifying questions** before planning or implementing for ambiguous requests
+4. **Propose, don't execute** - for non-trivial fixes, propose a plan and wait for approval
+
+## Ruby Conventions
+
+- Use `require_relative` for local files, `require` only for gems
+- Follow RuboCop rules - fix violations, never disable rules
+- Prefer keyword arguments for methods with 2+ parameters
+- Use frozen_string_literal magic comment in all Ruby files
+
+## Testing Requirements
+
+- Ensure test coverage stays above **50%** after changes
+- Add tests proactively when implementing features
+- For interactive/stdin features, ensure tests mock input to avoid timeouts
+- Run full test suite locally before creating PRs
+- Check coverage impact: `bundle exec rspec --format progress`
+
 ## CRITICAL RULES
 
 1. **Orchestrator First**: For ANY non-trivial task, use the `orchestrator` agent
