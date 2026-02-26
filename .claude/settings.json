@@ -11,6 +11,10 @@
     "Bash(rspec:*)",
     "Bash(rubocop:*)"
   ],
+  "statusLine": {
+    "type": "command",
+    "command": "bash ~/.claude/scripts/statusline-command.sh"
+  },
   "permissions": {
     "allow": [
       "Bash(gh pr view*)",

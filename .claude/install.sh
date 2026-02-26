@@ -24,6 +24,7 @@ echo "Creating symlinks..."
 ln -sf "$DOTFILES_DIR/hooks" "$CLAUDE_DIR/hooks"
 ln -sf "$DOTFILES_DIR/agents" "$CLAUDE_DIR/agents"
 ln -sf "$DOTFILES_DIR/commands" "$CLAUDE_DIR/commands"
+ln -sf "$DOTFILES_DIR/scripts" "$CLAUDE_DIR/scripts"
 
 # Link individual files
 ln -sf "$DOTFILES_DIR/CLAUDE.md" "$CLAUDE_DIR/CLAUDE.md"
