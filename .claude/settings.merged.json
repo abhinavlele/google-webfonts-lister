@@ -11,7 +11,17 @@
     "Bash(git status:*)",
     "Bash(git branch:*)",
     "Bash(git remote:*)",
-    "Bash(git stash:*)"
+    "Bash(git stash:*)",
+    "Bash(terraform:*)",
+    "Bash(terraform init:*)",
+    "Bash(terraform validate:*)",
+    "Bash(terraform plan:*)",
+    "Bash(terraform fmt:*)",
+    "Bash(terraform output:*)",
+    "Bash(terraform show:*)",
+    "Bash(terraform state list:*)",
+    "Bash(terraform state show:*)",
+    "Bash(terraform providers:*)"
   ],
   "permissions": {
     "allow": [
