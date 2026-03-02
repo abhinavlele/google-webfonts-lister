@@ -137,84 +137,12 @@ Sleeping before next poll...
 
 Exit this iteration. The Ralph loop hook will re-trigger the next iteration.
 
-### 4. COLLECT DATA
+### 4. PREPARE WORKTREE FOR THIS ITERATION
 
-For each new PR:
-
-```bash
-gh pr view <N> --json number,title,body,headRefName,mergedAt,mergeCommit,files,commits,labels
-gh pr diff <N>
-gh api repos/{owner}/{repo}/pulls/<N>/comments --jq '.[] | {user: .user.login, body: .body, path: .path, created_at: .created_at}' 2>/dev/null || echo "[]"
-gh api repos/{owner}/{repo}/issues/<N>/comments --jq '.[] | {user: .user.login, body: .body, created_at: .created_at}' 2>/dev/null || echo "[]"
-```
-
-The first comments endpoint returns **review comments** (inline on specific lines of code). The second returns **issue comments** (general discussion on the PR). Both provide context about decisions, reviewer feedback, and caveats that shaped the final code.
-
-Also read (from git, NOT from local working directory):
-
-```bash
-# Reference docs from the repo
-git show origin/poc:docs/poc-plan.md
-```
-
-Read existing cumulative reports from git for the agents to update:
-
-```bash
-git show origin/poc:reports/cumulative/level1-technical-log.md 2>/dev/null || echo ""
-git show origin/poc:reports/cumulative/level2-executive-summary.md 2>/dev/null || echo ""
-git show origin/poc:reports/cumulative/level3-project-tracker.md 2>/dev/null || echo ""
-git show origin/poc:reports/cumulative/level4-architecture-docs.md 2>/dev/null || echo ""
-```
-
-Read Terraform logs for infrastructure context (plan/apply/init outputs):
-
-```bash
-# List available terraform logs
-git show origin/poc:infrastructure/terraform/logs/ 2>/dev/null | head -20
-
-# Read each log file for infrastructure deployment details
-for log in $(git ls-tree --name-only origin/poc infrastructure/terraform/logs/ 2>/dev/null); do
-  echo "=== $log ==="
-  git show origin/poc:$log 2>/dev/null
-done
-```
-
-These logs contain Terraform plan/apply output showing actual AWS resources created, modified, or destroyed. They provide ground-truth infrastructure deployment data that supplements PR diffs.
-
-Read step-progress from the local poll state:
-
-```bash
-cat ../poc-nats-reports/.step-progress-local.json
-```
-
-Read PR classification data:
-
-```bash
-git show origin/poc:reports/state/pr-classification.json 2>/dev/null || echo '{"prs":{}, "cross_repo_prs":[], "auto_classify_rules":[]}'
-```
-
-### 4.5. CLASSIFY PRs
-
-For each new PR discovered in step 2, determine its path classification:
-
-1. **Check manual entries first**: Look up `prs[N]` in `pr-classification.json`. If present, use that path.
-2. **Try auto-classify rules**: Match the PR's `headRefName` against `auto_classify_rules` patterns (glob prefix match). First match wins.
-3. **Default to `shared`**: If no manual entry and no rule matches, classify as `shared` and log a warning:
-   ```
-   ⚠ PR #N (branch: <branch>) auto-classified as 'shared' (no rule matched)
-   ```
-
-Build a `classified_prs` array: `[{ "pr": N, "path": "spectrum"|"nlb"|"shared"|"meta" }, ...]`
-
-Also extract `cross_repo_prs` and `paths` from the classification and step-progress files.
-
-### 5. PREPARE WORKTREE FOR THIS ITERATION
-
-The persistent worktree already exists. Create a new branch for this batch:
+The persistent worktree already exists. Create a new branch for this batch (Step 2 already fetched `origin/poc` — no need to fetch again):
 
 ```bash
 cd ../poc-nats-reports
-git fetch origin poc
 git checkout -B reports/batch-$(date +%Y-%m-%d-%H%M) origin/poc
 ```
 
@@ -235,7 +163,93 @@ mkdir -p ../poc-nats-reports/reports/cumulative/
 mkdir -p ../poc-nats-reports/reports/state/
 ```
 
-Note: Cumulative reports are now on the worktree from `origin/poc` via the branch checkout. No need to copy files from the main repo.
+### 5. COLLECT DATA
+
+**For multiple new PRs**, batch the metadata fetch into a single API call:
+
+```bash
+gh pr list --base poc --state merged --json number,title,body,headRefName,mergedAt,mergeCommit,files,commits,labels --jq '[.[] | select(.number == <N1> or .number == <N2>)]'
+```
+
+**For a single new PR**, use the direct view:
+
+```bash
+gh pr view <N> --json number,title,body,headRefName,mergedAt,mergeCommit,files,commits,labels
+```
+
+For each PR, still fetch diff and comments individually:
+
+```bash
+gh pr diff <N>
+gh api repos/{owner}/{repo}/pulls/<N>/comments --jq '.[] | {user: .user.login, body: .body, path: .path, created_at: .created_at}' 2>/dev/null || echo "[]"
+gh api repos/{owner}/{repo}/issues/<N>/comments --jq '.[] | {user: .user.login, body: .body, created_at: .created_at}' 2>/dev/null || echo "[]"
+```
+
+The first comments endpoint returns **review comments** (inline on specific lines of code). The second returns **issue comments** (general discussion on the PR). Both provide context about decisions, reviewer feedback, and caveats that shaped the final code.
+
+Read reference docs from the **worktree filesystem** (checked out in Step 4):
+
+```bash
+cat ../poc-nats-reports/docs/poc-plan.md
+```
+
+Read existing cumulative reports from the worktree for the agents to update:
+
+```bash
+cat ../poc-nats-reports/reports/cumulative/level1-technical-log.md 2>/dev/null || echo ""
+cat ../poc-nats-reports/reports/cumulative/level2-executive-summary.md 2>/dev/null || echo ""
+cat ../poc-nats-reports/reports/cumulative/level3-project-tracker.md 2>/dev/null || echo ""
+cat ../poc-nats-reports/reports/cumulative/level4-architecture-docs.md 2>/dev/null || echo ""
+```
+
+Read Terraform logs from the worktree filesystem:
+
+```bash
+for log in ../poc-nats-reports/infrastructure/terraform/logs/*.log; do
+  [ -f "$log" ] || continue
+  echo "=== $(basename "$log") ==="
+  cat "$log"
+done
+```
+
+These logs contain Terraform plan/apply output showing actual AWS resources created, modified, or destroyed. They provide ground-truth infrastructure deployment data that supplements PR diffs.
+
+Read step-progress from the local poll state:
+
+```bash
+cat ../poc-nats-reports/.step-progress-local.json
+```
+
+Read PR classification data from the worktree:
+
+```bash
+cat ../poc-nats-reports/reports/state/pr-classification.json 2>/dev/null || echo '{"prs":{}, "cross_repo_prs":[], "auto_classify_rules":[]}'
+```
+
+### 5.5. CLASSIFY PRs
+
+For each new PR discovered in step 2, determine its path classification:
+
+1. **Check manual entries first**: Look up `prs[N]` in `pr-classification.json`. If present, use that path.
+2. **Try auto-classify rules**: Match the PR's `headRefName` against `auto_classify_rules` patterns (glob prefix match). First match wins.
+3. **Default to `shared`**: If no manual entry and no rule matches, classify as `shared` and log a warning:
+   ```
+   ⚠ PR #N (branch: <branch>) auto-classified as 'shared' (no rule matched)
+   ```
+
+Build a `classified_prs` array: `[{ "pr": N, "path": "spectrum"|"nlb"|"shared"|"meta" }, ...]`
+
+Also extract `cross_repo_prs` and `paths` from the classification and step-progress files.
+
+### 5.6. FETCH CROSS-REPO PR METADATA
+
+For each entry in `cross_repo_prs` where `pr` is not null:
+
+```bash
+gh pr view <pr> --repo <repo> --json number,title,state,url,files,mergedAt,headRefName 2>/dev/null || echo '{}'
+```
+
+Build `cross_repo_prs_enriched` by merging live data onto static entries. For entries with `pr: null`, pass through unchanged. The enriched array replaces the raw `cross_repo_prs` for all downstream steps.
 
 ### 6. CREATE TEAM AND TASKS
 
@@ -245,15 +259,15 @@ TeamCreate("report-batch")
 
 Create 4 tasks, one per report level. Each task description must include:
 - The collected PR data (metadata + diff)
-- The PR review comments and discussion comments (collected in step 4)
+- The PR review comments and discussion comments (collected in step 5)
 - The worktree path (`../poc-nats-reports`)
 - The per-merge directory path
-- The existing cumulative report content (read in step 4)
+- The existing cumulative report content (read in step 5)
 - The step-progress data (from `.step-progress-local.json`)
-- Terraform logs from `infrastructure/terraform/logs/` (read in step 4)
+- Terraform logs from `infrastructure/terraform/logs/` (read in step 5)
 - Mode: "per-merge"
-- `classified_prs` array from step 4.5: `[{ "pr": N, "path": "spectrum"|"nlb"|"shared"|"meta" }, ...]`
-- `cross_repo_prs` array from `pr-classification.json`
+- `classified_prs` array from step 5.5: `[{ "pr": N, "path": "spectrum"|"nlb"|"shared"|"meta" }, ...]`
+- `cross_repo_prs_enriched` array (live GitHub data merged onto static entries from `pr-classification.json`)
 - `paths` summary from `step-progress.json`
 
 ### 7. SPAWN 4 AGENTS IN PARALLEL
@@ -371,6 +385,12 @@ Update `../poc-nats-reports/.poll-state.json`:
 Update `../poc-nats-reports/.step-progress-local.json`:
 - Update step completion data based on newly processed PRs
 
+Reconcile cross-repo PR status in `../poc-nats-reports/.step-progress-local.json`:
+- Compare each cross-repo PR's live GitHub state (from `cross_repo_prs_enriched`) against local status
+- If GitHub says MERGED but local says "open" → update `paths.spectrum.cross_repo_prs` entry to "(merged)"
+- If GitHub says OPEN but local says "planned" → update entry to "(open)"
+- Log any status transitions in the dashboard output
+
 Use Python or jq to update the JSON. Write the updated content using the Write tool.
 
 **IMPORTANT**: Do NOT modify any files in the main working directory. All state updates go to the worktree's local files.
@@ -438,6 +458,29 @@ Path Progress:
 ```
 
 Include the step notes (abbreviated) after the percentage for context. For steps with 0%, show "Not started" or the relevant note.
+
+**Cross-Repo section** (append after Path Progress):
+
+Read the `cross_repo_prs_enriched` array. For each entry with a non-null `pr`, print:
+
+```
+Cross-Repo:
+  <repo>#<pr>: <status> (<short description>)
+```
+
+Example:
+
+```
+Cross-Repo:
+  infra-terraform#1295: open (Spectrum config)
+  infra-kubernetes#2897: open (Flux CRD)
+```
+
+If any status transitions occurred during reconciliation (Step 10), append a note:
+
+```
+  ↳ infra-terraform#1295: planned → open (status updated)
+```
 
 If no new merges were processed this iteration, still print the dashboard but change the "This Iteration" line to:
 
