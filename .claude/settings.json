@@ -1,30 +1,60 @@
 {
   "allowedTools": [
-    "Bash(git worktree:*)",
-    "Bash(git add:*)",
-    "Bash(git commit:*)",
-    "Bash(git fetch:*)",
-    "Bash(bundle exec:*)",
-    "Bash(bundle install*)",
-    "Bash(ruby:*)",
-    "Bash(rake:*)",
-    "Bash(rspec:*)",
-    "Bash(rubocop:*)",
-    "Bash(terraform:*)",
-    "Bash(terraform init:*)",
-    "Bash(terraform validate:*)",
-    "Bash(terraform plan:*)",
-    "Bash(terraform fmt:*)",
-    "Bash(terraform output:*)",
-    "Bash(terraform show:*)",
-    "Bash(terraform state list:*)",
-    "Bash(terraform state show:*)",
-    "Bash(terraform providers:*)"
+    "Bash(git *)",
+    "Bash(terraform *)",
+    "Bash(terraform init *)",
+    "Bash(terraform validate *)",
+    "Bash(terraform plan *)",
+    "Bash(terraform fmt *)",
+    "Bash(terraform output *)",
+    "Bash(terraform show *)",
+    "Bash(terraform state list *)",
+    "Bash(terraform state show *)",
+    "Bash(terraform providers *)",
+    "Bash(sleep *)",
+    "Bash(cat *)",
+    "Bash(head *)",
+    "Bash(tail *)",
+    "Bash(ls *)",
+    "Bash(pwd)",
+    "Bash(find *)",
+    "Bash(wc *)",
+    "Bash(which *)",
+    "Bash(echo *)",
+    "Bash(sort *)",
+    "Bash(uniq *)",
+    "Bash(dirname *)",
+    "Bash(basename *)",
+    "Bash(realpath *)",
+    "Bash(file *)",
+    "Bash(stat *)",
+    "Bash(date *)",
+    "Bash(env *)",
+    "Bash(cd *)",
+    "Bash(mkdir *)",
+    "Bash(cp *)",
+    "Bash(command *)",
+    "Bash(type *)",
+    "Bash(test *)",
+    "Bash([ *)",
+    "Bash(diff *)",
+    "Bash(touch *)",
+    "Bash(tee *)",
+    "Bash(xargs *)",
+    "Bash(bundle *)",
+    "Bash(npm *)",
+    "Bash(npx *)",
+    "Bash(node *)",
+    "Bash(ruby *)",
+    "Bash(python3 *)",
+    "Bash(make *)",
+    "Bash(brew *)",
+    "Bash(jq *)",
+    "Bash(sed *)",
+    "Bash(awk *)",
+    "Bash(tr *)",
+    "Bash(cut *)"
   ],
-  "statusLine": {
-    "type": "command",
-    "command": "bash ~/.claude/scripts/statusline-command.sh"
-  },
   "permissions": {
     "allow": [
       "Bash(gh pr view*)",
@@ -43,7 +73,127 @@
       "Bash(gh api*)",
       "Bash(gh run view*)",
       "Bash(gh run list*)",
-      "Bash(gh search*)"
+      "Bash(gh search*)",
+      "WebFetch(domain:thehackernews.com)",
+      "WebFetch(domain:www.thehackernews.com)",
+      "WebFetch(domain:bleepingcomputer.com)",
+      "WebFetch(domain:www.bleepingcomputer.com)",
+      "WebFetch(domain:krebsonsecurity.com)",
+      "WebFetch(domain:arstechnica.com)",
+      "WebFetch(domain:www.arstechnica.com)",
+      "WebFetch(domain:wired.com)",
+      "WebFetch(domain:www.wired.com)",
+      "WebFetch(domain:theregister.com)",
+      "WebFetch(domain:www.theregister.com)",
+      "WebFetch(domain:darkreading.com)",
+      "WebFetch(domain:www.darkreading.com)",
+      "WebFetch(domain:securityweek.com)",
+      "WebFetch(domain:www.securityweek.com)",
+      "WebFetch(domain:techcrunch.com)",
+      "WebFetch(domain:www.techcrunch.com)",
+      "WebFetch(domain:cisa.gov)",
+      "WebFetch(domain:www.cisa.gov)",
+      "WebFetch(domain:ncsc.gov.uk)",
+      "WebFetch(domain:www.ncsc.gov.uk)",
+      "WebFetch(domain:news.ycombinator.com)",
+      "WebFetch(domain:theverge.com)",
+      "WebFetch(domain:www.theverge.com)",
+      "WebFetch(domain:cyberscoop.com)",
+      "WebFetch(domain:www.cyberscoop.com)",
+      "WebFetch(domain:portswigger.net)",
+      "WebFetch(domain:www.portswigger.net)",
+      "WebFetch(domain:threatpost.com)",
+      "WebFetch(domain:www.threatpost.com)",
+      "WebFetch(domain:csoonline.com)",
+      "WebFetch(domain:www.csoonline.com)",
+      "WebFetch(domain:medium.com)",
+      "WebFetch(domain:github.com)"
+    ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "bash ~/.claude/scripts/statusline-command.sh"
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/wrappers/session_start.sh"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/wrappers/user_prompt_submit.sh"
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/wrappers/permission_request.sh"
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/wrappers/notification.sh"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/wrappers/stop.sh"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/wrappers/subagent_stop.sh"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/wrappers/pre_compact.sh"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/wrappers/session_end.sh"
+          }
+        ]
+      }
     ]
   }
 }
