@@ -149,26 +149,6 @@
         ]
       }
     ],
-    "PreToolUse": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/hooks/wrappers/pre_tool_use.sh"
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/hooks/wrappers/post_tool_use.sh"
-          }
-        ]
-      }
-    ],
     "PermissionRequest": [
       {
         "hooks": [

@@ -36,6 +36,70 @@ $ARGUMENTS
 If arguments include `--max-iterations`, use that value. Default: 50.
 If arguments include `--interval`, use that as sleep seconds between polls. Default: 300.
 
+## Required Permissions
+
+This command runs autonomously in a Ralph loop. All these permissions must be pre-approved
+in `~/.claude/settings.json` (allowedTools) or project `.claude/settings.local.json` (permissions.allow).
+
+### Bash Commands Used
+
+| Command | Step | Purpose |
+|---------|------|---------|
+| `git fetch` | 2 (Detect) | Fetch latest origin/poc |
+| `git log` | 2 (Detect) | Find new merge commits |
+| `git worktree list` | Setup | Check if worktree exists |
+| `git worktree add` | Setup | Create persistent worktree |
+| `git show` | Setup | Seed poll state from repo |
+| `git checkout -B` | 4 (Prepare) | Create batch branch in worktree |
+| `git add` | 9 (Commit) | Stage report files |
+| `git commit` | 9 (Commit) | Commit reports |
+| `git push` | 9 (Commit) | Push branch to remote |
+| `git stash` | 9.5 (Conflicts) | Stash local state before rebase |
+| `git rebase` | 9.5 (Conflicts) | Rebase on latest origin/poc |
+| `git push --force-with-lease` | 9.5 (Conflicts) | Force-push after rebase |
+| `gh pr list` | 5 (Collect) | Fetch merged PR metadata |
+| `gh pr view` | 5 (Collect) | Fetch single PR metadata |
+| `gh pr diff` | 5 (Collect) | Fetch PR diff |
+| `gh pr create` | 9 (Commit) | Create reports PR |
+| `gh api` | 5 (Collect) | Fetch PR comments, cross-repo data |
+| `mkdir` | 4 (Prepare) | Create report directories |
+| `cat` | 5 (Collect) | Read worktree files |
+| `sleep` | 13 (Exit) | Wait between poll iterations |
+| `python3` | 10 (State) | Update JSON state files |
+| `date` | 4 (Prepare) | Generate branch/directory names |
+| `wc` | 8.5 (Verify) | Check file lengths |
+
+### Tools Used
+
+| Tool | Purpose |
+|------|---------|
+| Read | Read poll state, cumulative reports, step-progress |
+| Write | Write per-merge reports, update cumulative reports, update state JSON |
+| Edit | Fix issues found during verification |
+| Bash | All commands above |
+| Agent (report-generator) | Spawn 4 parallel report writers |
+
+### Settings Checklist
+
+Verify these entries exist before running:
+
+**`~/.claude/settings.json` -> `allowedTools`:**
+- `Bash(git worktree:*)`, `Bash(git add:*)`, `Bash(git commit:*)`
+- `Bash(git fetch:*)`, `Bash(git push:*)`, `Bash(git log:*)`
+- `Bash(git diff:*)`, `Bash(git status:*)`, `Bash(git branch:*)`
+- `Bash(git checkout:*)`, `Bash(git show:*)`, `Bash(git stash:*)`
+- `Bash(git rebase:*)`, `Bash(sleep:*)`
+
+**`~/.claude/settings.json` -> `permissions.allow`:**
+- `Bash(gh pr view*)`, `Bash(gh pr list*)`, `Bash(gh pr diff*)`
+- `Bash(gh pr create*)`, `Bash(gh api*)`
+
+**Project `.claude/settings.local.json` -> `permissions.allow`:**
+- `Bash(sleep:*)`, `Bash(git:*)`, `Bash(mkdir:*)`
+- `Bash(cat:*)`, `Bash(python3:*)`, `Bash(date:*)`
+- `Bash(gh pr:*)`, `Bash(gh api:*)`
+- `Bash(git rebase:*)`, `Bash(git push --force-with-lease:*)`
+
 ## Initialize Ralph Loop
 
 ```python
@@ -371,6 +435,65 @@ gh pr create --base poc --title "Reports: PR #<numbers> batch" --body "$(cat <<'
 EOF
 )"
 ```
+
+### 9.5. HANDLE MERGE CONFLICTS
+
+After creating the PR, check if it can merge cleanly:
+
+```bash
+gh pr view <pr-number> --json mergeable,mergeStateStatus --jq '{mergeable: .mergeable, status: .mergeStateStatus}'
+```
+
+If `mergeable` is `CONFLICTING` or the push/PR creation failed:
+
+1. **Fetch and rebase:**
+   ```bash
+   cd ../poc-nats-reports
+   git fetch origin poc
+   git rebase origin/poc
+   ```
+
+2. **If rebase succeeds cleanly** (no conflicts):
+   ```bash
+   git push --force-with-lease
+   ```
+   The PR is now conflict-free. Continue to Step 10.
+
+3. **If rebase has conflicts** (files in both branches modified):
+   ```bash
+   git rebase --abort
+   ```
+
+   Then recreate the branch from scratch:
+   ```bash
+   git checkout -B <branch-name> origin/poc
+   ```
+
+   Re-read the now-current cumulative reports from the fresh checkout:
+   ```bash
+   cat reports/cumulative/level1-technical-log.md
+   cat reports/cumulative/level2-executive-summary.md
+   cat reports/cumulative/level3-project-tracker.md
+   cat reports/cumulative/level4-architecture-docs.md
+   ```
+
+   Regenerate ALL reports (both per-merge and cumulative) on top of the current `origin/poc` state.
+   This is a full regeneration -- the orchestrator writes all files directly (no agents needed for conflict recovery).
+
+   Then commit and force-push:
+   ```bash
+   git add reports/
+   git commit -m "Reports: PR #<numbers> batch update (rebased)"
+   git push --force-with-lease
+   ```
+
+   If the PR was already created, it will update automatically.
+   If PR creation failed earlier, create it now:
+   ```bash
+   gh pr create --base poc --title "..." --body "..."
+   ```
+
+**Key principle:** Never leave a PR with conflicts. Either resolve them automatically or recreate the branch from the latest `origin/poc`.
 
 ### 10. UPDATE LOCAL POLL STATE
 
