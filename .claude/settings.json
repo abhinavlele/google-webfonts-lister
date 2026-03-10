@@ -1,7 +1,6 @@
 {
   "allowedTools": [
     "Bash(git *)",
-    "Bash(terraform *)",
     "Bash(terraform init *)",
     "Bash(terraform validate *)",
     "Bash(terraform plan *)",
@@ -40,7 +39,6 @@
     "Bash(diff *)",
     "Bash(touch *)",
     "Bash(tee *)",
-    "Bash(xargs *)",
     "Bash(bundle *)",
     "Bash(npm *)",
     "Bash(npx *)",
