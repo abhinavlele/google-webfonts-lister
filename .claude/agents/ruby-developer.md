@@ -91,6 +91,15 @@ end
 2. If not, ADD IT to `boot.rb` first
 3. Then write the file WITHOUT any require statements
 
+## Ruby Conventions (Global)
+
+- Use `require_relative` for local files, `require` only for gems
+- Follow RuboCop rules — fix violations, never disable rules
+- Prefer keyword arguments for methods with 2+ parameters
+- Use `frozen_string_literal: true` magic comment in all Ruby files
+- Ensure test coverage stays above 50% after changes
+- For interactive/stdin features, ensure tests mock input to avoid timeouts
+
 ## When to Use This Agent
 
 - Writing or refactoring Ruby code

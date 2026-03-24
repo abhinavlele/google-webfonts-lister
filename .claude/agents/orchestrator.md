@@ -405,6 +405,30 @@ Prompt: Provide full context, including:
    Security: Reviewed and approved
 ```
 
+## AUTO-RUN Agents (Background)
+
+| Agent | Trigger | Action |
+|-------|---------|--------|
+| `session-observer` | Session start/end | Track patterns in scratchpad (`~/src/abhinavlele/llm-scratchpad/<project>/`) |
+| `test-writer-fixer` | Code changes | Proactively run tests |
+
+## Deliberate-First Decision Tree
+
+```
+Is task trivial? (single line, simple fix)
+├── YES → Do it directly
+└── NO → DELIBERATE FIRST (mandatory)
+         ├── Inline <deliberation> XML (quick, 2-5 min)
+         └── deliberate-analyst agent (complex, 10+ min)
+              │
+              ▼
+         ORCHESTRATOR implements using the analysis plan
+              │
+              ├─ Decomposes into sub-tasks
+              ├─ Delegates to specialized agents (parallel when possible)
+              └─ Enforces quality gates (tests, linters, security)
+```
+
 ## Remember
 
 - You are the **single point of coordination** for complex tasks

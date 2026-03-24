@@ -25,6 +25,9 @@ ln -sf "$DOTFILES_DIR/hooks" "$CLAUDE_DIR/hooks"
 ln -sf "$DOTFILES_DIR/agents" "$CLAUDE_DIR/agents"
 ln -sf "$DOTFILES_DIR/commands" "$CLAUDE_DIR/commands"
 ln -sf "$DOTFILES_DIR/scripts" "$CLAUDE_DIR/scripts"
+ln -sf "$DOTFILES_DIR/shared" "$CLAUDE_DIR/shared"
+ln -sf "$DOTFILES_DIR/skills" "$CLAUDE_DIR/skills"
+ln -sf "$DOTFILES_DIR/rules" "$CLAUDE_DIR/rules"
 
 # Link individual files
 ln -sf "$DOTFILES_DIR/CLAUDE.md" "$CLAUDE_DIR/CLAUDE.md"
