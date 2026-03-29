@@ -40,35 +40,6 @@ cp "$DOTFILES_DIR/settings.merged.json" "$CLAUDE_DIR/settings.json"
 echo "Making hook wrappers executable..."
 find "$DOTFILES_DIR/hooks/wrappers" -name "*.sh" -exec chmod +x {} \;
 
-# Setup Langfuse hooks virtual environment
-# Note: venv is created in dotfiles, accessible via ~/.claude/hooks/.venv symlink
-echo "Setting up Langfuse hooks environment..."
-HOOKS_VENV="$DOTFILES_DIR/hooks/.venv"
-
-if [[ ! -d "$HOOKS_VENV" ]]; then
-    # Check for Python 3.13 (required for langfuse, 3.14 not yet supported)
-    if command -v python3.13 &> /dev/null; then
-        echo "Creating hooks virtual environment with Python 3.13..."
-        python3.13 -m venv "$HOOKS_VENV"
-        echo "Installing langfuse package (v2 for compatibility)..."
-        "$HOOKS_VENV/bin/pip" install --quiet 'langfuse<3.0'
-        echo "✓ Langfuse hooks environment created"
-    else
-        echo "Warning: Python 3.13 not found. Langfuse observability will not work."
-        echo "Install with: brew install python@3.13"
-        echo "Then run this installer again."
-    fi
-else
-    # Verify langfuse is installed (and correct version)
-    if ! "$HOOKS_VENV/bin/python3" -c "import langfuse" 2>/dev/null; then
-        echo "Installing langfuse package (v2 for compatibility)..."
-        "$HOOKS_VENV/bin/pip" install --quiet 'langfuse<3.0'
-        echo "✓ Langfuse package installed"
-    else
-        echo "✓ Langfuse hooks environment ready"
-    fi
-fi
-
 # Verify Python dependencies
 echo "Checking Python setup..."
 if ! python3 -c "import json, sys, tempfile, subprocess, pathlib" 2>/dev/null; then
