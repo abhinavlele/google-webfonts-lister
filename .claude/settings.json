@@ -51,7 +51,12 @@
     "Bash(sed *)",
     "Bash(awk *)",
     "Bash(tr *)",
-    "Bash(cut *)"
+    "Bash(cut *)",
+    "Bash(~/.claude/scripts/autoresearch/init.sh *)",
+    "Bash(~/.claude/scripts/autoresearch/run.sh *)",
+    "Bash(~/.claude/scripts/autoresearch/log.sh *)",
+    "Bash(~/.claude/scripts/autoresearch/status.sh)",
+    "Bash(python3 ~/.claude/scripts/autoresearch/confidence.py *)"
   ],
   "permissions": {
     "allow": [
