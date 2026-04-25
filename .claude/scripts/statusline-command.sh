@@ -88,9 +88,34 @@ if [[ "$mcp_count" -gt 0 ]]; then
   # Segment 4: MCP [green]
   out+="${reset}${a_sep}${b_bg}${sep}${reset}"
   out+="${b_bg}${b_fg}${bold}  ${mcp_count} mcp: ${mcp_names} "
-  out+="${reset}${b_sep}${sep}${reset}"
+  last_bg="b"
 else
-  out+="${reset}${a_sep}${sep}${reset}"
+  last_bg="a"
+fi
+
+# --- Optional segment: Autoresearch ---
+ar_status_script="$HOME/.claude/scripts/autoresearch/status.sh"
+ar_line=""
+if [[ -x "$ar_status_script" ]]; then
+  ar_line=$("$ar_status_script" 2>/dev/null || true)
+fi
+
+if [[ -n "$ar_line" ]]; then
+  if [[ "$last_bg" == "b" ]]; then
+    out+="${reset}${b_sep}${a_bg}${sep}${reset}"
+    out+="${a_bg}${a_fg}${bold} ${ar_line} "
+    out+="${reset}${a_sep}${sep}${reset}"
+  else
+    out+="${reset}${a_sep}${b_bg}${sep}${reset}"
+    out+="${b_bg}${b_fg}${bold} ${ar_line} "
+    out+="${reset}${b_sep}${sep}${reset}"
+  fi
+else
+  if [[ "$last_bg" == "b" ]]; then
+    out+="${reset}${b_sep}${sep}${reset}"
+  else
+    out+="${reset}${a_sep}${sep}${reset}"
+  fi
 fi
 
 printf "%b\n" "$out"
