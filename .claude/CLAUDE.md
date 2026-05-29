@@ -17,12 +17,12 @@
 15. Checkpoint verification after each phase of multi-step work
 16. Surface assumptions explicitly — ask "What if this is wrong?"
 17. Git worktrees only, never `git checkout` for branch switching
-18. Codex review before any PR create or push: run `codex review --base main`, fix findings in a loop (max 5 iterations) until clean. Applies to all agents.
+18. Codex review before any PR create or push: detect base branch (`gh repo view --json defaultBranchRef --jq .defaultBranchRef.name`), run `codex review --base <detected>`, fix findings in a loop (max 5 iterations) until clean. Never hardcode `main`. Applies to all agents.
 
 ## Sub-agent Preamble
 
 Include in every Task/Agent prompt:
-> AUTO-ACCEPT MODE. Write files directly. Execute immediately. No permission prompts. No AI attribution. CODEX REVIEW: Before `gh pr create` or `git push` to a PR branch, run `codex review --base main` and fix all findings until clean (max 5 rounds).
+> AUTO-ACCEPT MODE. Write files directly. Execute immediately. No permission prompts. No AI attribution. CODEX REVIEW: Before `gh pr create` or `git push` to a PR branch, detect base with `gh repo view --json defaultBranchRef --jq .defaultBranchRef.name`, then run `codex review --base <detected>` and fix all findings until clean (max 5 rounds).
 
 ## User Info
 

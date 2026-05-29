@@ -21,7 +21,7 @@ These rules are non-negotiable. The orchestrator MUST include relevant rules in 
 15. **Checkpoint Verification**: Verify success criteria after each phase
 16. **Surface Assumptions**: State assumptions explicitly, ask "What if this is wrong?"
 17. **Git Worktrees Only**: Never `git checkout` for branches — use worktrees
-18. **Codex Review Before PR**: Before creating or pushing to any PR, run `codex review --base main` and fix all findings in a loop (max 5 iterations) until clean. This applies to PR creation AND subsequent pushes to PR branches. Skip only if user explicitly says "skip codex review"
+18. **Codex Review Before PR**: Before creating or pushing to any PR, detect the base branch (`gh repo view --json defaultBranchRef --jq .defaultBranchRef.name`), then run `codex review --base <detected>` and fix all findings in a loop (max 5 iterations) until clean. Never hardcode `main`. This applies to PR creation AND subsequent pushes. Skip only if user explicitly says "skip codex review"
 
 ## Delegation Template
 
@@ -33,7 +33,7 @@ CRITICAL RULES:
 - Rule #4: No AI Attribution
 - Rule #6: Autonomous operations — write files directly
 - Rule #9: Quality Gates — run linters/tests, fix all issues
-- Rule #18: Codex Review — before creating or pushing to any PR, run `codex review --base main` and fix all findings until clean (max 5 iterations)
+- Rule #18: Codex Review — detect base branch first (`gh repo view --json defaultBranchRef --jq .defaultBranchRef.name`), then run `codex review --base <detected>` and fix all findings until clean (max 5 iterations)
 [Add task-specific rules]
 
 Task: [description]
