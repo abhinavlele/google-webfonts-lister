@@ -40,6 +40,10 @@ cp "$DOTFILES_DIR/settings.merged.json" "$CLAUDE_DIR/settings.json"
 echo "Making hook wrappers executable..."
 find "$DOTFILES_DIR/hooks/wrappers" -name "*.sh" -exec chmod +x {} \;
 
+# Make user-facing scripts executable
+echo "Making scripts executable..."
+find "$DOTFILES_DIR/scripts" -name "*.sh" -exec chmod +x {} \;
+
 # Verify Python dependencies
 echo "Checking Python setup..."
 if ! python3 -c "import json, sys, tempfile, subprocess, pathlib" 2>/dev/null; then
