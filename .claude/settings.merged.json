@@ -88,6 +88,8 @@
       "Bash(gh run view*)",
       "Bash(gh run list*)",
       "Bash(gh search*)",
+      "Bash(codex review*)",
+      "Bash(~/.claude/scripts/codex-review-mark-clean.sh*)",
       "WebFetch(domain:thehackernews.com)",
       "WebFetch(domain:www.thehackernews.com)",
       "WebFetch(domain:bleepingcomputer.com)",
