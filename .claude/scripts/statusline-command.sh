@@ -11,24 +11,6 @@ model=$(echo "$input" | jq -r '.model.display_name // "unknown"')
 cwd=$(echo "$input" | jq -r '.workspace.current_dir // .cwd // ""')
 dir=$(basename "$cwd")
 
-# --- Token usage ---
-usage=$(echo "$input" | jq '.context_window.current_usage')
-if [[ "$usage" != "null" && -n "$usage" ]]; then
-  input_tok=$(echo "$usage" | jq '.input_tokens')
-  cache_create=$(echo "$usage" | jq '.cache_creation_input_tokens')
-  cache_read=$(echo "$usage" | jq '.cache_read_input_tokens')
-  total_tok=$(( input_tok + cache_create + cache_read ))
-  ctx_size=$(echo "$input" | jq '.context_window.context_window_size')
-  pct=$(( total_tok * 100 / ctx_size ))
-  if (( total_tok >= 1000 )); then
-    tok_display="${pct}% · $(( total_tok / 1000 ))k"
-  else
-    tok_display="${pct}% · ${total_tok}"
-  fi
-else
-  tok_display="0%"
-fi
-
 # --- MCP servers (from multiple sources) ---
 all_mcps=""
 
@@ -57,12 +39,12 @@ fi
 # --- Theme: two-tone (dark slate + lime green) ---
 sep=""
 
-# Color A: dark slate (model, tokens)
+# Color A: dark slate
 a_fg="\033[38;5;255m"
 a_bg="\033[48;5;239m"
 a_sep="\033[38;5;239m"
 
-# Color B: lime green matching screenshot (directory, MCP)
+# Color B: lime green
 b_fg="\033[38;5;235m"
 b_bg="\033[48;5;76m"
 b_sep="\033[38;5;76m"
@@ -71,25 +53,25 @@ bold="\033[1m"
 reset="\033[0m"
 
 # --- Build output ---
+# Layout: Model [A] → Directory [B] → MCP [A, if any] → Autoresearch [B, if any]
+# (Token / context-percent segment intentionally omitted — Claude Code already
+#  shows it in its own indicator below the prompt; this avoided duplicate and
+#  occasionally divergent numbers.)
 out=""
 
-# Segment 1: Model [dark]
+# Segment 1: Model [A]
 out+="${a_bg}${a_fg}${bold}  ${model} "
 out+="${reset}${a_sep}${b_bg}${sep}${reset}"
 
-# Segment 2: Directory [green]
+# Segment 2: Directory [B]
 out+="${b_bg}${b_fg}${bold}  ${dir} "
 
-# Segment 3: Tokens [dark]
-out+="${reset}${b_sep}${a_bg}${sep}${reset}"
-out+="${a_bg}${a_fg}${bold} 󰊪 ${tok_display} "
+last_bg="b"
 
 if [[ "$mcp_count" -gt 0 ]]; then
-  # Segment 4: MCP [green]
-  out+="${reset}${a_sep}${b_bg}${sep}${reset}"
-  out+="${b_bg}${b_fg}${bold}  ${mcp_count} mcp: ${mcp_names} "
-  last_bg="b"
-else
+  # Segment 3: MCP [A]
+  out+="${reset}${b_sep}${a_bg}${sep}${reset}"
+  out+="${a_bg}${a_fg}${bold}  ${mcp_count} mcp: ${mcp_names} "
   last_bg="a"
 fi
 
