@@ -21,7 +21,7 @@ These rules are non-negotiable. The orchestrator MUST include relevant rules in 
 15. **Checkpoint Verification**: Verify success criteria after each phase
 16. **Surface Assumptions**: State assumptions explicitly, ask "What if this is wrong?"
 17. **Git Worktrees Only**: Never `git checkout` for branches — use worktrees
-18. **Codex Review Before PR**: Before creating or pushing to any PR, detect the base branch (`gh repo view --json defaultBranchRef --jq .defaultBranchRef.name`), then run `codex review --base <detected>` and fix all findings in a loop (max 5 iterations) until clean. Never hardcode `main`. This applies to PR creation AND subsequent pushes. Skip only if user explicitly says "skip codex review"
+18. **Codex Review Before PR**: Before creating or pushing to any PR, delegate the review-and-fix loop to the `codex-reviewer` sub-agent. The sub-agent detects the base branch (`gh repo view --json defaultBranchRef --jq .defaultBranchRef.name`), runs `codex review --base <detected>`, fixes findings, commits, and stamps `.git/codex-review-ok` — all in its own context so the large review output never enters the caller. Do not run `codex review` inline from the main thread. Fallback (only when you are already inside a sub-agent that lacks the `Task` tool and therefore cannot spawn `codex-reviewer`): run `codex review --base <detected>` inline, but redirect output to a tempfile and read only the tail (e.g. `codex review --base "$BASE" > /tmp/codex-review-$$.txt 2>&1 && tail -200 /tmp/codex-review-$$.txt`) so the full diff/findings never enter your context. Never hardcode `main`. This applies to PR creation AND subsequent pushes. Skip only if user explicitly says "skip codex review"
 
 ## Delegation Template
 
@@ -33,7 +33,7 @@ CRITICAL RULES:
 - Rule #4: No AI Attribution
 - Rule #6: Autonomous operations — write files directly
 - Rule #9: Quality Gates — run linters/tests, fix all issues
-- Rule #18: Codex Review — detect base branch first (`gh repo view --json defaultBranchRef --jq .defaultBranchRef.name`), then run `codex review --base <detected>` and fix all findings until clean (max 5 iterations)
+- Rule #18: Codex Review — delegate to the `codex-reviewer` sub-agent (it detects base via `gh repo view --json defaultBranchRef --jq .defaultBranchRef.name`, runs `codex review --base <detected>`, fixes findings, commits, stamps `.git/codex-review-ok`). Inline fallback only if this agent lacks the `Task` tool: `codex review --base "$BASE" > /tmp/codex-review-$$.txt 2>&1 && tail -200 /tmp/codex-review-$$.txt` so the full output never enters context
 [Add task-specific rules]
 
 Task: [description]
