@@ -17,25 +17,22 @@
 15. Checkpoint verification after each phase of multi-step work
 16. Surface assumptions explicitly — ask "What if this is wrong?"
 17. Git worktrees only, never `git checkout` for branch switching
-18. Codex review before any PR create or push: detect base branch (`gh repo view --json defaultBranchRef --jq .defaultBranchRef.name`), run `codex review --base <detected>`, fix findings in a loop (max 5 iterations) until clean. Never hardcode `main`. Applies to all agents.
+18. Codex review before any PR create or push: delegate to the `codex-reviewer` sub-agent, which runs the loop (detect base via `gh repo view --json defaultBranchRef --jq .defaultBranchRef.name`, `codex review --base <detected>`, fix, commit, stamp) in isolation and returns a one-line status. Never run `codex review` inline from the main thread — the review output blows the context budget. Never hardcode `main`. Applies to all agents.
 
 ## Codex Review Gate (Enforced)
 
 A `PreToolUse` hook (`~/.claude/hooks/codex_review_gate.py`, registered for `Bash` in `settings.merged.json`) **blocks** `gh pr create ...` and `git push ...` (when the current branch is not the repo default) until a fresh review marker exists for the current `HEAD` SHA.
 
-Workflow when blocked:
-1. Detect base: `BASE=$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name)`
-2. `codex review --base "$BASE"`
-3. Fix all findings, commit, repeat (max 5 rounds) until clean
-4. Stamp the marker: `~/.claude/scripts/codex-review-mark-clean.sh` (writes `.git/codex-review-ok` with the current HEAD SHA)
-5. Retry the original `gh pr create` / `git push`
+Workflow when blocked: spawn the `codex-reviewer` sub-agent with the target repo dir and detected base branch. The sub-agent does the entire loop (review → fix → commit → repeat ≤5 rounds → stamp `.git/codex-review-ok`) in its own context and reports back `clean: ...` / `failed: ...` / `blocked: ...` in one line. On `clean`, retry the original `gh pr create` / `git push`. On `failed` / `blocked`, surface to the user — do not bypass without explicit approval.
 
-The marker is HEAD-pinned: any new commit invalidates it and forces a fresh review. Bypass a single command only with `SKIP_CODEX_REVIEW=1 <command>` (use sparingly, e.g. emergency revert of a broken main).
+Why the sub-agent: codex review output is large (full diff analysis, all findings) and we run it up to 5 times. Running inline pushes the main conversation past 100% context. The sub-agent isolates that output entirely.
+
+The marker is HEAD-pinned: any new commit invalidates it and forces a fresh review. Bypass for a single command with `SKIP_CODEX_REVIEW=1 <cmd>` (use sparingly, e.g. emergency revert of a broken main).
 
 ## Sub-agent Preamble
 
 Include in every Task/Agent prompt:
-> AUTO-ACCEPT MODE. Write files directly. Execute immediately. No permission prompts. No AI attribution. CODEX REVIEW: Before `gh pr create` or `git push` to a PR branch, detect base with `gh repo view --json defaultBranchRef --jq .defaultBranchRef.name`, then run `codex review --base <detected>` and fix all findings until clean (max 5 rounds). After clean, stamp the marker with `~/.claude/scripts/codex-review-mark-clean.sh` (the PreToolUse gate blocks `gh pr create` / `git push` until the marker matches HEAD).
+> AUTO-ACCEPT MODE. Write files directly. Execute immediately. No permission prompts. No AI attribution. CODEX REVIEW: Before `gh pr create` or `git push` to a PR branch, delegate the review-and-fix loop to the `codex-reviewer` sub-agent (it detects the base branch, runs `codex review`, fixes findings, commits, and stamps `.git/codex-review-ok`). Only run `codex review` inline as a manual fallback if you are already inside an agent and cannot spawn another — pipe codex output through `tail -200` and a tempfile so it never enters your context.
 
 ## User Info
 
