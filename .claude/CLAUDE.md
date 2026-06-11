@@ -29,10 +29,18 @@ Why the sub-agent: codex review output is large (full diff analysis, all finding
 
 The marker is HEAD-pinned: any new commit invalidates it and forces a fresh review. Bypass for a single command with `SKIP_CODEX_REVIEW=1 <cmd>` (use sparingly, e.g. emergency revert of a broken main).
 
+The `codex-reviewer` sub-agent runs codex via `~/.claude/scripts/codex-isolated.sh` (fresh empty `HOME` per call) so codex's `~/.codex` session store — which `CODEX_HOME` does not govern — can't replay another repo's cached scan; it also checks the review `workdir:` and falls back to isolated `codex exec` on a replay.
+
+## Generation Doctrine (Enforced)
+
+Full adversarial self-review checklist: `rules/generation-doctrine.md` (always loaded). Before committing, check symmetry (every enforcement path), hostile inputs, mirror ops (import↔export, create↔delete), crash/replay, literal-vs-intent, and a violating test per security/data invariant. `/selfreview` walks it against the diff.
+
+Repos with a `.invariants.json` also get a `PreToolUse` gate (`invariant_gate.py`) running `invariant-lint.mjs` on push/PR that **blocks** HARD findings (interpolated SQL, committed creds, off-allowlist egress). Scaffold with `/invariants-init`; bypass with `SKIP_INVARIANT_GATE=1 <cmd>`.
+
 ## Sub-agent Preamble
 
 Include in every Task/Agent prompt:
-> AUTO-ACCEPT MODE. Write files directly. Execute immediately. No permission prompts. No AI attribution. CODEX REVIEW: Before `gh pr create` or `git push` to a PR branch, delegate the review-and-fix loop to the `codex-reviewer` sub-agent (it detects the base branch, runs `codex review`, fixes findings, commits, and stamps `.git/codex-review-ok`). Only run `codex review` inline as a manual fallback if you are already inside an agent and cannot spawn another — pipe codex output through `tail -200` and a tempfile so it never enters your context.
+> AUTO-ACCEPT MODE. Write files directly. Execute immediately. No permission prompts. No AI attribution. CODEX REVIEW: Before `gh pr create` or `git push` to a PR branch, delegate the review-and-fix loop to the `codex-reviewer` sub-agent (it detects the base branch, runs `codex review`, fixes findings, commits, and stamps `.git/codex-review-ok`). Only run `codex review` inline as a manual fallback if you are already inside an agent and cannot spawn another — pipe codex output through `tail -200` and a tempfile so it never enters your context. Before committing, complete the adversarial self-review in rules/generation-doctrine.md (symmetry / hostile-input / mirror-ops / crash-replay / tests-encode-invariants) and, in repos with .invariants.json, ensure `node scripts/invariant-lint.mjs` passes.
 
 ## User Info
 

@@ -1,0 +1,27 @@
+{
+  "id": "typescript",
+  "description": "TypeScript/JavaScript baseline: no dynamic code evaluation, no shell-interpolated child_process. Deliberately omits style noise (`: any` etc.) — this pack only encodes invariants. The eval/Function lookbehinds exclude method calls (regex.exec, vm.eval wrappers) so legit code is not blocked.",
+  "rules": [
+    {
+      "id": "no-eval",
+      "severity": "hard",
+      "include": ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts", "**/*.js", "**/*.jsx", "**/*.mjs", "**/*.cjs"],
+      "pattern": "(?<![\\w.$])eval\\s*\\(",
+      "message": "eval() — dynamic code evaluation is an injection sink; parse and dispatch explicitly instead"
+    },
+    {
+      "id": "no-function-constructor",
+      "severity": "hard",
+      "include": ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts", "**/*.js", "**/*.jsx", "**/*.mjs", "**/*.cjs"],
+      "pattern": "\\bnew\\s+Function\\s*\\(",
+      "message": "new Function() — eval in disguise; parse and dispatch explicitly instead"
+    },
+    {
+      "id": "shell-interpolated-exec",
+      "severity": "hard",
+      "include": ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts", "**/*.js", "**/*.jsx", "**/*.mjs", "**/*.cjs"],
+      "pattern": "(?:\\bchild_process\\.|\\bcp\\.|require\\(\\s*[\"'](?:node:)?child_process[\"']\\s*\\)\\s*\\.|(?<![\\w.$]))exec(?:Sync)?\\s*\\(\\s*`[^`]*\\$\\{",
+      "message": "child_process exec with ${...} interpolated into the shell command — use execFile/spawn with an argument array (regex .exec() is not matched; aliased imports like `exec as run` are beyond this rule — keep the canonical name)"
+    }
+  ]
+}

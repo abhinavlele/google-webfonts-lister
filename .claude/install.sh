@@ -20,17 +20,42 @@ fi
 # Create symlinks for directories and files
 echo "Creating symlinks..."
 
+# `ln -sf <src> <dst>` does NOT replace a real directory at <dst>; it creates
+# the symlink INSIDE that directory instead, leaving any pre-existing files
+# stranded (an older statusline-command.sh in ~/.claude/scripts/ went stale
+# this way). Replace any real directory or regular file at the target with a
+# fresh symlink, after taking a timestamped backup so nothing local is lost.
+link_target() {
+    local src="$1"
+    local dst="$2"
+    if [[ -L "$dst" ]]; then
+        ln -sfn "$src" "$dst"
+        return
+    fi
+    if [[ -e "$dst" ]]; then
+        local backup="${dst}.backup.$(date +%Y%m%d_%H%M%S)"
+        echo "Backing up existing $dst -> $backup"
+        mv "$dst" "$backup"
+    fi
+    ln -s "$src" "$dst"
+}
+
 # Link directories
-ln -sf "$DOTFILES_DIR/hooks" "$CLAUDE_DIR/hooks"
-ln -sf "$DOTFILES_DIR/agents" "$CLAUDE_DIR/agents"
-ln -sf "$DOTFILES_DIR/commands" "$CLAUDE_DIR/commands"
-ln -sf "$DOTFILES_DIR/scripts" "$CLAUDE_DIR/scripts"
-ln -sf "$DOTFILES_DIR/shared" "$CLAUDE_DIR/shared"
-ln -sf "$DOTFILES_DIR/skills" "$CLAUDE_DIR/skills"
-ln -sf "$DOTFILES_DIR/rules" "$CLAUDE_DIR/rules"
+link_target "$DOTFILES_DIR/hooks"    "$CLAUDE_DIR/hooks"
+link_target "$DOTFILES_DIR/agents"   "$CLAUDE_DIR/agents"
+link_target "$DOTFILES_DIR/commands" "$CLAUDE_DIR/commands"
+link_target "$DOTFILES_DIR/scripts"  "$CLAUDE_DIR/scripts"
+link_target "$DOTFILES_DIR/shared"   "$CLAUDE_DIR/shared"
+link_target "$DOTFILES_DIR/skills"   "$CLAUDE_DIR/skills"
+link_target "$DOTFILES_DIR/rules"    "$CLAUDE_DIR/rules"
+# Rule-pack catalog for invariant-lint (`.invariants.json` "extends") —
+# /invariants-init reads it and the engine falls back to it when a repo has
+# no vendored .invariants/packs/.
+link_target "$DOTFILES_DIR/invariants" "$CLAUDE_DIR/invariants"
 
 # Link individual files
-ln -sf "$DOTFILES_DIR/CLAUDE.md" "$CLAUDE_DIR/CLAUDE.md"
+link_target "$DOTFILES_DIR/CLAUDE.md" "$CLAUDE_DIR/CLAUDE.md"
+link_target "$DOTFILES_DIR/.invariants.example.json" "$CLAUDE_DIR/.invariants.example.json"
 
 # Install merged settings.json (not as symlink to avoid conflicts)
 echo "Installing settings.json with hooks configuration..."

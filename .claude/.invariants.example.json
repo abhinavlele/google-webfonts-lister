@@ -1,0 +1,39 @@
+{
+  "//": "Example .invariants.json — copy to <repo-root>/.invariants.json (or run /invariants-init, which detects the stack and fills this in).",
+  "// schema": "Keys starting with '//' are comments and are ignored by invariant-lint.mjs. All top-level keys are optional; omit a key to disable that feature. The linter's universal built-ins (sql-interpolation, private-key, hardcoded-credential) always run, config or not.",
+  "// extends": "Array of rule-pack ids from the catalog (~/.claude/invariants/packs/, docs in ~/.claude/invariants/README.md). Each id resolves to <id>.json in <repo>/.invariants/packs/ (vendored, preferred) then ~/.claude/invariants/packs/. Packs may extend other packs (react and cloudflare-workers both pull in typescript). Missing/malformed/circular packs warn to stderr and are skipped — never fatal. A local `rules` entry with the same id overrides a pack rule.",
+  "extends": [
+    "secrets",
+    "typescript"
+  ],
+  "// egressAllowlist": "Array of host glob patterns. Any ADDED fetch()/axios/http.get/requests.get call with a string-LITERAL http(s)://host matching none of these is a HARD `rogue-egress` finding. Env-derived calls with no literal host are allowed. `*.example.com` also allows the bare apex `example.com`. Packs with requireEgressAllowlist (e.g. cloudflare-workers) WARN `egress-unconfigured` if this is empty/missing.",
+  "egressAllowlist": [
+    "*.example.com",
+    "api.internal.net"
+  ],
+  "// requireTestWithSrc": "WARN `missing-test` when files matching srcGlobs change with no change matching testGlobs. Globs: `**` spans directories, `*`/`?` do not.",
+  "requireTestWithSrc": {
+    "enabled": true,
+    "srcGlobs": ["src/**", "lib/**"],
+    "testGlobs": ["test/**", "tests/**", "spec/**", "e2e/**", "**/*.test.*", "**/*.spec.*"]
+  },
+  "// rules": "Custom rules encoding THIS repo's invariants, applied to added lines of files matching `include` (a glob or array of globs). severity: 'hard' (blocks, exit 1) or 'warn'. `pattern` is a JS regex source string (escape backslashes for JSON); optional `flags` ('imsu'). Reusing a pack rule's id here overrides that pack rule.",
+  "rules": [
+    {
+      "//": "Example: every new write path to the blocks table must reference the containment guard.",
+      "id": "unguarded-block-write",
+      "severity": "warn",
+      "include": "src/**/db.*",
+      "pattern": "INSERT\\s+INTO\\s+blocks(?![\\s\\S]*checkParent)",
+      "message": "write to `blocks` without checkParent — every block write path must enforce tree containment (symmetry)"
+    },
+    {
+      "//": "Example: no raw innerHTML outside the sanitizer module.",
+      "id": "raw-innerhtml",
+      "severity": "hard",
+      "include": "web/**/*.ts",
+      "pattern": "\\.innerHTML\\s*=",
+      "message": "innerHTML assignment outside the sanitize pipeline — render through the sanitizer"
+    }
+  ]
+}
