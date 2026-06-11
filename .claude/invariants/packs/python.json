@@ -1,0 +1,34 @@
+{
+  "id": "python",
+  "description": "Python baseline: no shell=True subprocess, no unsafe YAML/pickle deserialization, no f-string SQL. The f-string-SQL rule overlaps the engine's built-in sql-interpolation (the floor) but also fires when only the pack is vendored elsewhere.",
+  "rules": [
+    {
+      "id": "subprocess-shell-true",
+      "severity": "hard",
+      "include": "**/*.py",
+      "pattern": "\\bshell\\s*=\\s*True\\b",
+      "message": "shell=True hands the command line to a shell — use an argument list with shell=False (also matches multi-line subprocess calls)"
+    },
+    {
+      "id": "yaml-unsafe-load",
+      "severity": "hard",
+      "include": "**/*.py",
+      "pattern": "\\byaml\\.load(?:_all)?\\s*\\((?![^)]*\\b(?:C?SafeLoader|C?BaseLoader|C?FullLoader)\\b)",
+      "message": "yaml.load without a known-safe Loader (SafeLoader/BaseLoader/FullLoader, keyword or positional) executes arbitrary tags — yaml.Loader/UnsafeLoader are NOT safe; use yaml.safe_load, Loader=yaml.SafeLoader, or yaml.load(data, yaml.SafeLoader)"
+    },
+    {
+      "id": "pickle-load",
+      "severity": "warn",
+      "include": "**/*.py",
+      "pattern": "\\bpickle\\.loads?\\s*\\(",
+      "message": "pickle deserialization executes arbitrary code if the bytes are attacker-influenced — confirm the source is trusted or use a data-only format (JSON)"
+    },
+    {
+      "id": "fstring-sql-execute",
+      "severity": "hard",
+      "include": "**/*.py",
+      "pattern": "\\.execute(?:many)?\\s*\\(\\s*(?:[fF][rR]?|[rR][fF])[\"'][^\"']*(?<!\\{)\\{(?!\\{)",
+      "message": "f-string with interpolation passed to .execute() — use bound parameters, never string-built SQL"
+    }
+  ]
+}

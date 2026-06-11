@@ -22,9 +22,9 @@ You are the Codex review gate runner. Your sole job is to bring the current bran
    BASE=$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name)
    ```
 3. Loop, up to 5 iterations:
-   1. Truncate the log: `: > "$LOG"`. Start codex in the background with the Bash tool's `run_in_background: true`:
+   1. Truncate the log: `: > "$LOG"`. Start codex in the background with the Bash tool's `run_in_background: true`. **Always run codex through the HOME-isolation wrapper** — bare `codex review` can replay an unrelated repo's cached scan ("wrong-repo" bug); the wrapper gives codex a fresh empty HOME so it has no prior session to replay (see `~/.claude/scripts/codex-isolated.sh`). Use the latest model (`-m gpt-5.5`; if it errors as unknown, pick the highest `gpt-5.x` from `~/.codex/models_cache.json`):
       ```
-      codex review --base "$BASE" > "$LOG" 2>&1
+      ~/.claude/scripts/codex-isolated.sh review -m gpt-5.5 --base "$BASE" > "$LOG" 2>&1
       ```
       Capture the returned shell id (call it `CODEX_SH`).
    2. Poll until codex exits. Loop:
@@ -36,10 +36,11 @@ You are the Codex review gate runner. Your sole job is to bring the current bran
       - Call `BashOutput(bash_id=$CODEX_SH)` to check status. When `BashOutput` reports the shell has exited, capture the exit code (`RC`).
       - If polling has run for >15 minutes (30 polls), call `KillBash(shell_id=$CODEX_SH)` and return `failed: codex review timeout after 15min — see /tmp/codex-reviewer-current.log`.
    3. If `RC` is non-zero, treat it as a hard error (auth/CLI/runtime failure) and return `failed: codex review exited <RC> — see /tmp/codex-reviewer-current.log`. Do NOT proceed to stamp the marker.
-   4. Inspect the log: `tail -n 200 "$LOG"`, plus `Read` selectively if needed. Do NOT print full output back to the parent.
-   5. If codex returned clean (no findings), break out of the loop and go to step 4.
-   6. For each finding: edit the relevant file, then `git add <file>`. After all findings are addressed, `git commit -m "<short message describing the fix bucket>"` (no AI attribution).
-   7. Continue to the next iteration.
+   4. **Wrong-repo guard.** Confirm codex reviewed THIS repo: the log's `workdir:` line must be the target repo root, and findings must reference its files. If the log shows a different repo/path (a stale-session replay slipped past isolation), discard this round and retry step 3.1 once more (the wrapper already makes a fresh HOME each call). If a second attempt still replays, fall back to the isolated `exec` form for this round — `~/.claude/scripts/codex-isolated.sh exec -m gpt-5.5 --sandbox read-only "Review the diff of the current branch against $BASE; cd into the repo, read changed files, report prioritized findings with file:line + severity, or 'no material findings'." > "$LOG" 2>&1` — and if THAT also replays, return `blocked: codex-wrong-repo — see $LOG`.
+   5. Inspect the log: `tail -n 200 "$LOG"`, plus `Read` selectively if needed. Do NOT print full output back to the parent.
+   6. If codex returned clean (no findings), break out of the loop and go to step 4.
+   7. For each finding: edit the relevant file, then `git add <file>`. After all findings are addressed, `git commit -m "<short message describing the fix bucket>"` (no AI attribution).
+   8. Continue to the next iteration.
 4. Stamp the marker:
    ```
    ~/.claude/scripts/codex-review-mark-clean.sh
