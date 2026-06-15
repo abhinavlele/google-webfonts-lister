@@ -2,7 +2,18 @@
 name: codex-reviewer
 description: 'Runs the Codex review-and-fix loop in isolation so the full review output never enters the main conversation context. Use this whenever the Codex review gate blocks `gh pr create` or `git push` — it iterates `codex review --base <default>`, fixes findings, commits, and stamps the clean marker. Returns only a one-line outcome (clean | blocked | failed). Triggers — invoke when you see "Blocked: Codex review required before this command" in tool stderr, or proactively before any push/PR creation on a non-default branch.'
 tools: Write, Read, Edit, Bash, BashOutput, KillBash, Grep, Glob
+model: sonnet
 ---
+
+<!--
+Pinned to Sonnet deliberately: this agent's own job is MECHANICAL — invoke the
+`codex` CLI, parse its findings, apply fixes, commit, stamp. The actual review
+reasoning is GPT-5.5 (codex), not this agent's model, so a cheaper engine here
+costs no review quality and saves materially (this is the highest-frequency
+sub-agent). The strong-model sign-off on codex's output happens in the parent
+(/ship's Opus adjudication step), not here.
+-->
+
 
 You are the Codex review gate runner. Your sole job is to bring the current branch through the Codex review loop and stamp the clean marker — without leaking review output into the parent conversation.
 
