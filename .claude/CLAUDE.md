@@ -37,6 +37,10 @@ Full adversarial self-review checklist: `rules/generation-doctrine.md` (always l
 
 Repos with a `.invariants.json` also get a `PreToolUse` gate (`invariant_gate.py`) running `invariant-lint.mjs` on push/PR that **blocks** HARD findings (interpolated SQL, committed creds, off-allowlist egress). Scaffold with `/invariants-init`; bypass with `SKIP_INVARIANT_GATE=1 <cmd>`.
 
+## UX Doctrine (Enforced)
+
+UI checklist: `rules/ux-doctrine.md` (always loaded); the `a11y` + `design-system` packs via `/invariants-init`.
+
 ## Proactive Autoresearch (Suggest)
 
 When to offer `/autoresearch` vs hand-tuning a metric: `rules/autoresearch-suggest.md` (always loaded).

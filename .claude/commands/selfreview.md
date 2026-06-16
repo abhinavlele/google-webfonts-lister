@@ -69,6 +69,40 @@ behavior.
 
 </selfreview>
 
+## 2b. UX pass — ux-doctrine (only if the diff touches a user interface)
+
+If the diff changes any UI (`.tsx`/`.jsx`/`.vue`/`.svelte`/`.html`/`.erb`
+templates, components, styles), also walk
+`~/.claude/rules/ux-doctrine.md` Part A against it and write out, item by
+item — skip this section entirely for non-UI diffs:
+
+<uxreview>
+
+### Every state, not just the happy one
+For each new/changed view: are empty, loading, error, partial, and success
+states each designed (not defaulted)? Name any that are missing.
+
+### Keyboard & screen-reader path
+For each interactive element added: how a keyboard-only user reaches and
+operates it (tab order, visible focus, accessible name, Enter/Space). Custom
+controls: their `role` and the keys handled, plus focus movement after the
+action.
+
+### Real data, not mock data
+What happens at the boundaries the mock hid: longest string, zero/one/many
+items, missing image, RTL/accented locale, narrowest/widest viewport.
+
+### Feedback & reversibility
+Every mutating action: its immediate feedback, and for destructive actions a
+confirm or undo. Double-submission guarded.
+
+### Consistency & copy
+Reuses existing components/tokens (not one-off literals — the `design-system`
+WARNs above are the mechanical signal). User-facing copy is in the user's
+language, localized, with no raw codes / `undefined` / `NaN` leaking.
+
+</uxreview>
+
 ## 3. Verdict
 
 State clearly: **READY TO COMMIT** (every item answered, lint clean) or

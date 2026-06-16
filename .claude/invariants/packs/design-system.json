@@ -1,0 +1,35 @@
+{
+  "id": "design-system",
+  "description": "Design-system discipline: prefer tokens/components over hardcoded visual values so the UI stays consistent and themeable. All rules are WARN — a one-off literal is sometimes legitimate (a chart legend, a third-party embed), so these report rather than block. Tighten or redefine any rule id in the repo's .invariants.json once the team agrees it should be HARD, or narrow `include` to the component dirs. The DS component-substitution rules (prefer <Button> over <button>, etc.) are intentionally NOT here — the component names are repo-specific; add them as repo-local `rules`.",
+  "rules": [
+    {
+      "id": "hardcoded-color-literal",
+      "severity": "warn",
+      "include": ["**/*.tsx", "**/*.jsx", "**/*.vue", "**/*.svelte"],
+      "pattern": "(?:color|background|border|outline|fill|stroke|shadow)[A-Za-z]*\\s*[:=]\\s*[\\{\"'`]?\\s*['\"]?#[0-9a-fA-F]{3,8}\\b",
+      "flags": "i",
+      "message": "hardcoded hex color on a style property — use a design token / theme variable so dark mode and rebrands work. Anchored to a color-ish property to avoid flagging unrelated hex (ids, keys)."
+    },
+    {
+      "id": "hardcoded-px-font-size",
+      "severity": "warn",
+      "include": ["**/*.tsx", "**/*.jsx", "**/*.vue", "**/*.svelte"],
+      "pattern": "font-?[Ss]ize\\s*[:=]\\s*[\\{\"'`]?\\s*['\"]?\\d+px",
+      "message": "fontSize in raw px — use a typography token or rem so the UI respects the user's font-scale settings."
+    },
+    {
+      "id": "tailwind-arbitrary-value",
+      "severity": "warn",
+      "include": ["**/*.tsx", "**/*.jsx", "**/*.html", "**/*.vue", "**/*.svelte"],
+      "pattern": "\\[(?:#[0-9a-fA-F]{3,8}|[0-9.]+(?:px|rem|em|vh|vw))\\]",
+      "message": "Tailwind arbitrary value (e.g. text-[#fff], w-[437px]) bypasses the design scale — use a scale class (text-sm, w-96) or extend the theme/token config."
+    },
+    {
+      "id": "inline-style-object",
+      "severity": "warn",
+      "include": ["**/*.tsx", "**/*.jsx"],
+      "pattern": "style=\\{\\{(?![^}]*\\b(?:transform|translate|width|height|top|left|--)[^}]*\\})",
+      "message": "static inline style object — prefer className / design tokens for themeable, reusable styling. Dynamic styles (transform, computed dimensions, CSS custom properties) are not flagged."
+    }
+  ]
+}

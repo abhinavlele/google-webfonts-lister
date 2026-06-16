@@ -14,6 +14,30 @@ into packs by listing their ids in `.invariants.json`:
 
 `/invariants-init` detects the repo's stack and scaffolds this for you.
 
+## Catalog
+
+**Security / correctness** (deterministic half of `generation-doctrine.md`):
+`secrets`, `typescript`, `react`, `cloudflare-workers`, `rails`, `python`.
+
+**UX** (deterministic half of `ux-doctrine.md`) — the mechanically-checkable
+subset of "good UI":
+
+- `a11y` — accessibility invariants for JSX/HTML/Vue/Svelte. Mostly **HARD**:
+  alt-less `<img>`, hrefless `<a>`, title-less `<iframe>`, positive
+  `tabIndex`, click handlers on non-interactive elements with no keyboard
+  path; `autoFocus` is WARN. Patterns match per added line, so a tag split
+  across lines can slip — keep the attribute on the opening line.
+- `design-system` — design-token discipline, all **WARN** (a one-off literal
+  is sometimes legitimate): hardcoded hex colors on style props, raw-`px`
+  font sizes, Tailwind arbitrary values, static inline style objects. The
+  component-substitution rules (prefer `<Button>` over raw `<button>`) are
+  intentionally NOT shipped — component names are repo-specific; add them as
+  repo-local `rules`.
+
+The semantic half of UX (states, copy, contrast, focus order) is not
+regex-checkable — it lives in `~/.claude/rules/ux-doctrine.md`, which
+`/selfreview` walks against UI diffs.
+
 ## Pack schema
 
 One pack = one `packs/<id>.json` file. The filename (minus `.json`) IS the

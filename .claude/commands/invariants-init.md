@@ -23,12 +23,28 @@ find to rule-pack ids from the catalog (`~/.claude/invariants/packs/`):
 | `package.json` deps/devDeps contain `typescript` (or any `tsconfig.json`) | `typescript` |
 | `Gemfile` exists | `rails` |
 | `requirements.txt` or `pyproject.toml` exists | `python` |
+| renders a UI — deps contain `react`/`vue`/`svelte`/`@angular`/`solid-js`, OR the repo has `**/*.tsx`/`**/*.jsx`/`**/*.vue`/`**/*.svelte` files, OR server-rendered `.erb`/`.html.*` templates | `a11y` |
+| has a design system — Tailwind (`tailwind.config.*`), a tokens/theme dep (`@radix-ui/*`, `styled-components`, `@emotion/*`, `@chakra-ui/*`, a `tokens`/`design-system` package or dir), OR any UI pack was selected above | `design-system` |
 | always | `secrets` |
 
 Drop redundant ids: `react` and `cloudflare-workers` already extend
 `typescript`, so omit `typescript` when either of those is selected. A
 polyglot repo gets multiple packs — each rule is scoped by its `include`
 globs, so they coexist.
+
+**UX packs (`a11y`, `design-system`) — what they are and how strict.** These
+are the deterministic, regex-checkable subset of "good UI"; the semantic half
+(states, copy, contrast, focus order) lives in the always-loaded
+`~/.claude/rules/ux-doctrine.md` that `/selfreview` walks — mention it when you
+offer these packs. `a11y` rules are mostly **HARD** (a hrefless anchor, an
+alt-less image, a positive tabindex are never intentional). `design-system`
+rules are all **WARN** (a one-off literal is sometimes legitimate) — tell the
+owner they can promote any rule to HARD or narrow its `include` by redefining
+the rule id in `.invariants.json` once the team agrees. Offer `a11y` whenever a
+UI is detected; offer `design-system` alongside it but flag that its
+component-substitution rules (prefer `<Button>` over raw `<button>`) are
+repo-specific and belong in the repo's local `rules` (the pack ships only the
+generic literal/token checks).
 
 Also note the source/test layout (src/, lib/, app/, test/, tests/, spec/,
 e2e/) for `requireTestWithSrc`, and grep for `https?://` literals — these
@@ -142,6 +158,12 @@ Report to the user:
 - That the PreToolUse gate (`invariant_gate.py`) now activates automatically
   for this repo on `git push` / `gh pr create` (opt-in is the presence of
   `.invariants.json`); bypass per-command with `SKIP_INVARIANT_GATE=1`.
+- If a UX pack (`a11y`/`design-system`) was selected: note that these cover
+  only the mechanical subset of UI quality, and point the owner at
+  `~/.claude/rules/ux-doctrine.md` (the states / keyboard / real-data / copy
+  checklist `/selfreview` walks) for the semantic half. Remind that
+  `design-system` rules are WARN by default — promote to HARD per the team's
+  bar by redefining the rule id locally.
 - Suggest running `node scripts/invariant-lint.mjs` now to baseline, and
   `/selfreview` before each commit.
 - Remind: tune `.invariants.json` as the repo's invariants grow — every
