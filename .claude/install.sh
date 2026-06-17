@@ -25,10 +25,36 @@ echo "Creating symlinks..."
 # stranded (an older statusline-command.sh in ~/.claude/scripts/ went stale
 # this way). Replace any real directory or regular file at the target with a
 # fresh symlink, after taking a timestamped backup so nothing local is lost.
+# Remove stale recursive self-symlinks left by older versions of this script
+# (pre-`ln -sfn`), e.g. claude/skills/skills -> claude/skills. Such a link
+# lives directly inside a managed source directory and resolves back to that
+# same directory. Only EXACT self-loops are removed; real symlinks that point
+# elsewhere are left untouched. Because ~/.claude/<dir> is itself a symlink to
+# the source dir, cleaning the source also clears the loop seen via ~/.claude.
+cleanup_self_symlinks() {
+    local dir="$1"
+    [[ -d "$dir" ]] || return
+    local dir_real entry entry_real
+    dir_real="$(cd "$dir" && pwd -P)"
+    for entry in "$dir"/*; do
+        [[ -L "$entry" ]] || continue
+        entry_real="$(cd "$entry" 2>/dev/null && pwd -P)" || continue
+        if [[ "$entry_real" == "$dir_real" ]]; then
+            echo "Removing stale recursive self-symlink $entry"
+            rm "$entry"
+        fi
+    done
+}
+
 link_target() {
     local src="$1"
     local dst="$2"
+    cleanup_self_symlinks "$src"
     if [[ -L "$dst" ]]; then
+        # `-n` is load-bearing: without it `ln -s` follows an existing
+        # symlink-to-directory and creates the new link INSIDE it, yielding a
+        # recursive self-link (e.g. claude/skills/skills -> claude/skills). Do
+        # NOT downgrade this to `ln -sf`.
         ln -sfn "$src" "$dst"
         return
     fi
