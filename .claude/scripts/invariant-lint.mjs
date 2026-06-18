@@ -59,8 +59,19 @@
  *                         Env-derived / no-literal calls are allowed. A pack
  *                         with `requireEgressAllowlist: true` makes an
  *                         empty/missing allowlist a WARN `egress-unconfigured`.
- *   requireTestWithSrc    { enabled, srcGlobs[], testGlobs[] } — WARN
- *                         `missing-test` when src changes without a test change.
+ *   requireTestWithSrc    `missing-test` when changed src has no matching test.
+ *                         Two shapes, both honoring `severity` ("hard"|"warn",
+ *                         default "warn" → unchanged WARN behavior; "hard"
+ *                         exits 1; unknown → warn + stderr notice):
+ *                           legacy flat: { enabled, srcGlobs[], testGlobs[],
+ *                                          severity? } — one requirement.
+ *                           per-kind:    { enabled, severity?, requirements: [
+ *                                          { srcGlobs[], testGlobs[], message? },
+ *                                          ... ] } — each requirement evaluated
+ *                                          INDEPENDENTLY, so a web/** change can
+ *                                          demand an e2e/** test (a unit test
+ *                                          does NOT satisfy it) while a src/**
+ *                                          change accepts any unit OR e2e test.
  *   rules                 [{ id, severity: "hard"|"warn", include: glob|[glob],
  *                            pattern: regex, flags?, message }] applied to
  *                         added lines.
@@ -72,9 +83,10 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import console from "node:console";
 import process from "node:process";
 
@@ -93,9 +105,13 @@ function usage() {
       "                    and ~/.claude/invariants/packs",
       "",
       "Built-in HARD (always): sql-interpolation, private-key, hardcoded-credential",
-      "Config HARD: rogue-egress (egressAllowlist), pack/custom rules with severity \"hard\"",
-      "Config WARN: missing-test (requireTestWithSrc), egress-unconfigured,",
+      "Config HARD: rogue-egress (egressAllowlist), pack/custom rules with severity \"hard\",",
+      "             missing-test when requireTestWithSrc.severity is \"hard\"",
+      "Config WARN: missing-test (requireTestWithSrc, default), egress-unconfigured,",
       "             pack/custom rules with severity \"warn\"",
+      "requireTestWithSrc: { enabled, severity?, srcGlobs[], testGlobs[] } OR",
+      "             { enabled, severity?, requirements: [{ srcGlobs[], testGlobs[],",
+      "             message? }] } — per-requirement web->e2e vs src->any-test policy.",
       "Rule-packs: .invariants.json \"extends\": [\"typescript\", ...] — missing/",
       "            malformed/cyclic packs warn to stderr and are skipped, never fatal.",
       "",
@@ -694,25 +710,85 @@ function lintRogueEgress(file, lines, allowlist, findings) {
 }
 
 // ---------------------------------------------------------------------------
-// Config WARN: missing-test — src changed without any test change.
+// Config: missing-test — src changed without a matching test change.
+//
+// Two config shapes, both honoring `severity` ("hard"|"warn", default "warn"
+// so existing configs are unchanged → identical WARN behavior):
+//
+//   Legacy flat:  { enabled, srcGlobs[], testGlobs[], severity? }
+//                 treated as a SINGLE requirement.
+//   requirements: { enabled, severity?, requirements: [
+//                     { srcGlobs[], testGlobs[], message? }, ... ] }
+//                 each requirement is evaluated INDEPENDENTLY — a web/** change
+//                 can demand an e2e/** test while a src/** change accepts any
+//                 unit OR e2e test. A unit test does not satisfy a UI change.
+//
+// `severity: "hard"` makes a missing test a HARD finding (exit 1). An unknown
+// severity falls back to warn with a one-line stderr notice — never a crash.
 // ---------------------------------------------------------------------------
-function lintMissingTest(changedFiles, cfg, findings) {
-  if (!cfg || cfg.enabled === false) return;
-  const srcGlobs = cfg.srcGlobs || [];
-  const testGlobs = cfg.testGlobs || [];
+
+/** Map a configured severity ("hard"|"warn") to a finding level. Unknown
+ *  values degrade to WARN with a stderr notice — this must never crash. */
+function resolveMissingTestLevel(severity) {
+  if (severity === undefined || severity === null) return "WARN";
+  const s = String(severity).toLowerCase();
+  if (s === "hard") return "HARD";
+  if (s === "warn") return "WARN";
+  packWarn(
+    `requireTestWithSrc has unknown severity ${JSON.stringify(severity)} — treating as "warn"`,
+  );
+  return "WARN";
+}
+
+/**
+ * Evaluate ONE requirement against the changed files and push at most one
+ * finding. `touchesSrc` = files matching srcGlobs but NOT testGlobs (so a test
+ * file that also matches a broad src glob is never itself counted as the
+ * untested src). `hasTest` = any changed file matches testGlobs. Empty globs
+ * on either side make the requirement a no-op (nothing to enforce).
+ */
+function checkTestRequirement(changedFiles, req, level, findings) {
+  if (!req || typeof req !== "object") return;
+  const srcGlobs = Array.isArray(req.srcGlobs) ? req.srcGlobs : [];
+  const testGlobs = Array.isArray(req.testGlobs) ? req.testGlobs : [];
   if (srcGlobs.length === 0 || testGlobs.length === 0) return;
   const touchesSrc = changedFiles.filter(
     (f) => matchesAnyGlob(f, srcGlobs) && !matchesAnyGlob(f, testGlobs),
   );
-  const touchesTests = changedFiles.some((f) => matchesAnyGlob(f, testGlobs));
-  if (touchesSrc.length > 0 && !touchesTests) {
+  const hasTest = changedFiles.some((f) => matchesAnyGlob(f, testGlobs));
+  if (touchesSrc.length > 0 && !hasTest) {
     findings.push({
-      level: "WARN",
+      level,
       rule: "missing-test",
       loc: touchesSrc[0],
-      msg: `diff touches ${touchesSrc.length} src file(s) with no test change — does an invariant-violating test cover this?`,
+      msg:
+        req.message ||
+        `diff touches ${touchesSrc.length} file(s) matching [${srcGlobs.join(", ")}] ` +
+          `with no matching test (expected one of [${testGlobs.join(", ")}]) — ` +
+          "does an invariant-violating test cover this?",
     });
   }
+}
+
+function lintMissingTest(changedFiles, cfg, findings) {
+  if (!cfg || cfg.enabled === false) return;
+  const level = resolveMissingTestLevel(cfg.severity);
+  if (Array.isArray(cfg.requirements)) {
+    // Per-kind form: each requirement enforced independently (symmetry — a
+    // web→e2e rule and a src→any-test rule both get their own evaluation).
+    for (const req of cfg.requirements) {
+      checkTestRequirement(changedFiles, req, level, findings);
+    }
+    return;
+  }
+  // Legacy flat form — a single requirement, honoring severity (default warn
+  // → byte-for-byte identical behavior to before this change).
+  checkTestRequirement(
+    changedFiles,
+    { srcGlobs: cfg.srcGlobs, testGlobs: cfg.testGlobs, message: cfg.message },
+    level,
+    findings,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -917,4 +993,33 @@ function main() {
   process.exit(hard.length ? 1 : 0);
 }
 
-main();
+// Named exports for unit testing. Importing this module must NOT run the CLI.
+export { lintMissingTest, checkTestRequirement, resolveMissingTestLevel };
+
+// Run main() only when this file is the process entrypoint (invoked directly,
+// e.g. `node invariant-lint.mjs`), never when imported by a test. Prefer the
+// runtime flag, fall back to comparing the resolved entry path to this module.
+// The fallback also follows symlinks so that installs where ~/.claude/scripts
+// is a symlink to the dotfiles repo (e.g. via install.sh) continue to work on
+// Node versions that lack import.meta.main.
+const invokedDirectly = (() => {
+  if (typeof import.meta.main === "boolean") return import.meta.main;
+  if (!process.argv[1]) return false;
+  const realArgv = (() => {
+    try {
+      return realpathSync(process.argv[1]);
+    } catch {
+      return path.resolve(process.argv[1]);
+    }
+  })();
+  const realSelf = (() => {
+    const self = fileURLToPath(import.meta.url);
+    try {
+      return realpathSync(self);
+    } catch {
+      return path.resolve(self);
+    }
+  })();
+  return realArgv === realSelf;
+})();
+if (invokedDirectly) main();
