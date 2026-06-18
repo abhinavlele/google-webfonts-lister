@@ -14,6 +14,50 @@ into packs by listing their ids in `.invariants.json`:
 
 `/invariants-init` detects the repo's stack and scaffolds this for you.
 
+## `requireTestWithSrc` — require a test alongside changed source
+
+Beyond `extends`/`rules`, `.invariants.json` can require that a change which
+touches source also ships a test. It emits a `missing-test` finding and
+supports a `severity` (`"hard"` blocks with exit 1, `"warn"` reports — the
+**default is `"warn"`**, so existing flat configs are unchanged; an unknown
+value degrades to warn with a stderr notice).
+
+Two shapes:
+
+```jsonc
+// Legacy flat form — one src→test rule (severity optional, defaults to warn):
+"requireTestWithSrc": {
+  "enabled": true,
+  "srcGlobs": ["src/**"],
+  "testGlobs": ["test/**", "**/*.test.*"]
+}
+
+// Per-kind form — each requirement is evaluated INDEPENDENTLY, so a UI change
+// can be forced to ship an e2e test (a unit test does NOT satisfy it) while a
+// plain src change accepts any unit OR e2e test:
+"requireTestWithSrc": {
+  "enabled": true,
+  "severity": "hard",
+  "requirements": [
+    {
+      "srcGlobs": ["web/**"],
+      "testGlobs": ["e2e/**", "**/*.spec.*"],
+      "message": "web/** (UI) change must ship an e2e test — a unit test does not satisfy a UI change"
+    },
+    {
+      "srcGlobs": ["src/**"],
+      "testGlobs": ["test/**", "e2e/**", "**/*.test.*", "**/*.spec.*"],
+      "message": "src/** change must ship a test (unit or e2e)"
+    }
+  ]
+}
+```
+
+For each requirement, files matching `srcGlobs` but NOT `testGlobs` are the
+"untested src"; if any exist and no changed file matches that requirement's
+`testGlobs`, one finding is pushed at the configured severity. Empty globs on
+either side make a requirement a no-op. `enabled: false` disables the check.
+
 ## Catalog
 
 **Security / correctness** (deterministic half of `generation-doctrine.md`):
@@ -110,10 +154,33 @@ packs.
 `scripts/invariant-lint.mjs`. CI therefore needs no dotfiles checkout and
 no `~/.claude` — the repo carries everything the lint needs, and resolution
 order means the vendored copies win even on a machine that also has the
-catalog installed. To pick up upstream pack changes, re-run
-`/invariants-init` logic for the copy step (or copy the changed pack file
-over the vendored one) in a reviewed PR — vendored packs are pinned on
-purpose.
+catalog installed.
+
+### Refreshing a repo — `/invariants-init` UPDATE mode (safe to re-run)
+
+`/invariants-init` is **safe to RE-RUN** on a repo that already adopted the
+gate. When it finds an existing `.invariants.json`, it switches to UPDATE /
+SYNC mode instead of stopping:
+
+- **Re-vendor the mechanism (overwrite freely).** It copies the current
+  `~/.claude/scripts/invariant-lint.mjs` over the repo's vendored linter and
+  re-copies every pack in the repo's `extends` (full transitive closure) over
+  the vendored `.invariants/packs/*.json`. These are copies and are drift-prone
+  by design — re-vendoring is exactly how they stay in sync with upstream, so
+  overwriting them is expected. It reports which files changed (old→new).
+- **Reconcile `.invariants.json` surgically (never clobber policy).** It
+  PRESERVES the repo's `extends`, custom `rules` (including pack-rule
+  overrides by id), `egressAllowlist`, and all `"//"` comments. It compares
+  only the standard params (today: `requireTestWithSrc`) against the current
+  recommended shape; if one has drifted it reports a before/after and
+  applies — or, for a deliberately tuned value, offers — the recommended
+  default, editing ONLY that single key. It never rewrites the whole file.
+- **Idempotent.** A second consecutive re-run with no upstream change
+  re-vendors byte-identical files and reports no config drift.
+
+This is the supported way to pick up upstream linter/pack changes (do it in a
+reviewed PR — vendored packs are pinned on purpose). Manually copying a single
+changed pack file over its vendored copy also works for a one-off.
 
 ## Adding a new pack
 

@@ -86,12 +86,105 @@ comments — keep them as inline documentation). Tailor it:
   if you found none, write an empty array plus a `"//"` comment telling the
   owner to fill it in. For other stacks, omit the key if the repo should
   not enforce egress.
-- `requireTestWithSrc`: set `srcGlobs`/`testGlobs` to the detected layout.
+- `requireTestWithSrc`: pick the shape from the detected layout:
+  - **If the repo has an `e2e/` directory** (Playwright/Cypress/etc.), the
+    RECOMMENDED shape is the HARD per-kind form — a UI change must ship a
+    runnable e2e spec (a unit test does NOT satisfy it), while a plain
+    `src/**` change accepts any unit OR e2e test:
+    ```json
+    "requireTestWithSrc": {
+      "enabled": true, "severity": "hard",
+      "requirements": [
+        { "srcGlobs": ["web/**"], "testGlobs": ["e2e/**/*.spec.*"], "message": "web/** (UI) change must ship a runnable e2e spec (e2e/**/*.spec.*) — a unit test does not satisfy a UI change" },
+        { "srcGlobs": ["src/**"], "testGlobs": ["test/**","e2e/**","**/*.test.*","**/*.spec.*"], "message": "src/** change must ship a test (unit or e2e)" }
+      ]
+    }
+    ```
+    Note that `web/**` matches assets too (CSS, images) — if forcing an e2e
+    spec on a pure-CSS change is too strict for the team, narrow the first
+    `srcGlobs` (e.g. `["web/**/*.ts","web/**/*.tsx"]`). Map `web/**` and
+    `src/**` to whatever the repo's actual UI vs. server dirs are.
+  - **If there is NO `e2e/` directory**, keep the generic flat WARN shape with
+    `srcGlobs`/`testGlobs` set to the detected layout:
+    ```json
+    "requireTestWithSrc": { "enabled": true, "srcGlobs": ["src/**"], "testGlobs": ["test/**", "**/*.test.*"] }
+    ```
 - `rules`: an EMPTY array (with the `"//"` doc comment) — repo-specific
   invariants get added as they are discovered; packs carry the stack-level
   ones. Note in the comment that reusing a pack rule's id here overrides it.
 
-If `.invariants.json` already exists, do NOT overwrite it — report and stop.
+## 2a. If `.invariants.json` ALREADY exists → UPDATE / SYNC mode (re-run)
+
+Do NOT just stop. A re-run of `/invariants-init` against a repo that already
+adopted the gate is the supported way to REFRESH it — pick up a newer dotfiles
+linter, newer rule-packs, and the current recommended config defaults —
+WITHOUT clobbering the repo's hand-authored policy. Follow these steps in
+order; the goal is "re-vendor the mechanism freely, reconcile the policy
+surgically."
+
+### Step U1 — Re-vendor the mechanism (safe to overwrite)
+
+The vendored linter and packs are COPIES of the dotfiles originals; they are
+drift-prone by nature (a stale vendored copy silently runs old rules), so
+overwriting them on every re-run is expected and correct.
+
+1. Copy `~/.claude/scripts/invariant-lint.mjs` →
+   `<repo>/scripts/invariant-lint.mjs`, preserving the executable bit and the
+   `// VENDORED` header. Before overwriting, capture the old file's content (or
+   its `git hash-object`) so you can REPORT whether it changed.
+2. For EVERY pack in the repo's existing `extends` (resolve the full closure,
+   including transitive `extends` — same as step 3 below), copy
+   `~/.claude/invariants/packs/<id>.json` → `<repo>/.invariants/packs/<id>.json`,
+   overwriting the vendored copy. Capture which pack files changed.
+3. Do NOT add or remove packs from `extends` here — re-vendoring refreshes the
+   CONTENT of already-selected packs. (If the stack genuinely grew, the owner
+   re-runs detection in step 1 and edits `extends` deliberately.)
+
+### Step U2 — Reconcile `.invariants.json` SAFELY (never clobber repo policy)
+
+Read the existing `.invariants.json`. PRESERVE verbatim: `extends`, the repo's
+custom `rules` (including any rule that overrides a pack rule by id), the
+`egressAllowlist`, all `"//"` documentation comments, and any repo-specific
+params. You are NOT rewriting the file — you are reconciling ONLY the standard
+params that have a current recommended shape.
+
+1. Compare the repo's `requireTestWithSrc` against the CURRENT RECOMMENDED
+   shape for this repo (per section 2 above: HARD per-kind when an `e2e/` dir
+   exists, generic flat WARN otherwise). If it has DRIFTED (e.g. it is still
+   the old flat WARN form but the repo now has an `e2e/` dir, or it is missing
+   a `severity`), REPORT the drift with a clear before/after of just that
+   param, and APPLY the recommended default — modifying ONLY
+   `requireTestWithSrc`, leaving `extends` / `rules` / `egressAllowlist` /
+   comments byte-for-byte intact. If the repo's existing value already encodes
+   a deliberate, stricter-or-equal policy (e.g. custom `srcGlobs`/`message`
+   the owner clearly tuned), do NOT overwrite it — OFFER the recommended shape
+   in the report and let the owner decide.
+2. Apply the same compare-report-reconcile to any other standard param that
+   later grows a recommended shape, always touching ONLY that one key.
+3. The reconcile is ADDITIVE and EXPLICIT: every change is a single-param edit
+   shown as before/after. If nothing drifted, say so and leave the file
+   untouched.
+
+### Step U3 — Report a drift summary
+
+End UPDATE mode with:
+- **Linter:** changed (old hash → new hash) or already current.
+- **Packs:** which vendored pack files were updated (and that vendored copies
+  are otherwise drift-prone — this re-vendor is how they stay in sync).
+- **Config:** each `.invariants.json` param recommendation applied (with
+  before/after) or merely offered; confirm `extends`, custom `rules`, and
+  `egressAllowlist` were preserved unchanged.
+- The sanity checks: `node scripts/invariant-lint.mjs --help`, then a real run
+  (`node scripts/invariant-lint.mjs`) — confirm the header lists the expected
+  packs and no `pack ... not found` warnings appear.
+
+UPDATE mode is idempotent: a second consecutive re-run with no upstream change
+re-vendors byte-identical files and reports no config drift. STOP after the
+update flow — do not run the NEW-repo scaffold steps 3–4 again (the CI job and
+pack closure are already in place; the re-vendor above already refreshed them).
+
+The rest of this document (steps 3–5) is the NEW-repo scaffold path, taken only
+when `.invariants.json` did NOT already exist.
 
 ## 3. Vendor the linter AND the resolved packs
 
