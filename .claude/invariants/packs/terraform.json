@@ -1,6 +1,6 @@
 {
   "id": "terraform",
-  "description": "Terraform / HCL invariants. Catches publicly-exposed ACLs, wide-open security groups, deletion-unprotected stateful resources, and inline secret strings. Apply to any Terraform repo.",
+  "description": "Terraform / HCL invariants. Catches publicly-exposed ACLs, wide-open security groups, deletion-unprotected stateful resources, and inline secret strings. Apply to any Terraform repo. Extended with: terraform-public-access-block-disabled, terraform-rds-publicly-accessible, terraform-storage-unencrypted, terraform-iam-principal-wildcard, terraform-skip-final-snapshot, terraform-provisioner-exec, terraform-weak-tls-policy.",
   "rules": [
     {
       "//": "S3 buckets with public ACLs are a frequent cause of data leaks. The correct pattern is private ACL + explicit bucket policy if exposure is genuinely required. Pattern covers HCL (`acl = \"public-read\"`) and Terraform JSON (`\"acl\": \"public-read\"`).",
@@ -66,6 +66,62 @@
       "include": ["**/*.tf", "**/*.tf.json"],
       "pattern": "(?:\"Resource\"|\\bResource)\\s*[=:]\\s*(?:\\[\\s*)?\"\\*\"(?:\\s*\\])?",
       "message": "IAM Resource wildcard (\"*\") added — verify that Action is also scoped (not \"*\"). A full Action=*/Resource=* grant is the IAM equivalent of root; document the rationale for any service-linked / break-glass role."
+    },
+    {
+      "//": "The aws_s3_bucket_public_access_block (and the account-level analog) is the last-line guardrail against accidental public exposure. Setting any of its four flags to false re-opens the door that the resource exists to close. Catches HCL (`block_public_acls = false`) and Terraform JSON (`\"block_public_acls\": false`) for all four attributes. Fix: keep all four true unless a bucket is deliberately, reviewably public — and then scope it with an explicit bucket policy, not by disabling the block.",
+      "id": "terraform-public-access-block-disabled",
+      "severity": "hard",
+      "include": ["**/*.tf", "**/*.tf.json"],
+      "pattern": "(?:(?:block_public_acls|block_public_policy|ignore_public_acls|restrict_public_buckets)\\s*=|\"(?:block_public_acls|block_public_policy|ignore_public_acls|restrict_public_buckets)\"\\s*:)\\s*false",
+      "message": "S3 public-access-block flag set to false — this re-opens the public-exposure guardrail. Keep block_public_acls / block_public_policy / ignore_public_acls / restrict_public_buckets all true; scope any intentional exposure via an explicit bucket policy instead."
+    },
+    {
+      "//": "publicly_accessible = true on an aws_db_instance / aws_rds_cluster_instance assigns the database a public IP and (with a permissive SG) exposes it directly to the internet — a frequent breach vector. Covers HCL and Terraform JSON literals. Fix: set publicly_accessible = false and reach the DB through a private subnet / VPN / bastion.",
+      "id": "terraform-rds-publicly-accessible",
+      "severity": "hard",
+      "include": ["**/*.tf", "**/*.tf.json"],
+      "pattern": "(?:publicly_accessible\\s*=|\"publicly_accessible\"\\s*:)\\s*true",
+      "message": "publicly_accessible = true on an RDS instance exposes the database to the public internet. Set it to false and reach the DB via a private subnet / VPN / bastion."
+    },
+    {
+      "//": "Explicitly disabling encryption-at-rest (`storage_encrypted = false` on RDS, `encrypted = false` on aws_ebs_volume / aws_ebs_snapshot / default EBS encryption) ships unencrypted data to disk. The negative lookbehind `(?<![A-Za-z_])` anchors the attribute name so a longer attribute ending in `encrypted` is not misread; the listed names (storage_encrypted, encrypted) are the common ones. Covers HCL and Terraform JSON. Fix: set the flag to true (and supply a CMK via kms_key_id for customer-managed keys).",
+      "id": "terraform-storage-unencrypted",
+      "severity": "hard",
+      "include": ["**/*.tf", "**/*.tf.json"],
+      "pattern": "(?<![A-Za-z_])(?:(?:storage_encrypted|encrypted)\\s*=|\"(?:storage_encrypted|encrypted)\"\\s*:)\\s*false",
+      "message": "Encryption-at-rest explicitly disabled (storage_encrypted/encrypted = false). Set it to true and supply a kms_key_id for a customer-managed key where required."
+    },
+    {
+      "//": "A resource-based policy whose Principal (or its nested AWS key) is \"*\" grants access to every AWS account / anonymous caller — for an S3 bucket policy, SQS/SNS, or KMS key policy this is public access. Sometimes intentional (a deliberately public bucket) but far more often a misconfig, so WARN, matching the IAM-wildcard rules. Covers `\"Principal\": \"*\"`, `Principal = \"*\"`, and the nested `\"AWS\": \"*\"` / `\"AWS\": [\"*\"]` forms. Fix: name the specific account/role ARNs, or gate the wildcard with a tight Condition (aws:SourceArn, aws:PrincipalOrgID).",
+      "id": "terraform-iam-principal-wildcard",
+      "severity": "warn",
+      "include": ["**/*.tf", "**/*.tf.json"],
+      "pattern": "(?:(?:\"Principal\"|Principal)\\s*[=:]\\s*(?:\\[\\s*)?\"\\*\"|(?:\"AWS\"|\\bAWS)\\s*[=:]\\s*(?:\\[\\s*)?\"\\*\")",
+      "message": "IAM/resource policy Principal = \"*\" grants access to every account / anonymous caller (public). Name specific account or role ARNs, or constrain the wildcard with a tight Condition (aws:SourceArn, aws:PrincipalOrgID). Document the rationale if the resource is deliberately public."
+    },
+    {
+      "//": "skip_final_snapshot = true means destroying an RDS/Aurora/DocumentDB instance leaves NO final backup — an irreversible data-loss footgun if the resource is ever torn down. Sometimes acceptable for throwaway/dev databases, so WARN. Fix: set skip_final_snapshot = false (and a final_snapshot_identifier) for any database holding data you cannot recreate.",
+      "id": "terraform-skip-final-snapshot",
+      "severity": "warn",
+      "include": ["**/*.tf", "**/*.tf.json"],
+      "pattern": "(?:skip_final_snapshot\\s*=|\"skip_final_snapshot\"\\s*:)\\s*true",
+      "message": "skip_final_snapshot = true — destroying this database takes no final backup (irreversible data loss). Set it to false with a final_snapshot_identifier for any database holding non-recreatable data."
+    },
+    {
+      "//": "A local-exec / remote-exec provisioner runs arbitrary shell on `terraform apply` — outside the provider graph, with no state tracking, often invoking curl|sh or embedding credentials. It is the Terraform supply-chain / arbitrary-code sink. HashiCorp itself documents provisioners as a last resort. WARN: a legitimate bootstrap exists occasionally. Fix: prefer a provider resource, cloud-init/user_data, or a purpose-built tool; if a provisioner is unavoidable, keep the command argv-explicit and credential-free.",
+      "id": "terraform-provisioner-exec",
+      "severity": "warn",
+      "include": ["**/*.tf", "**/*.tf.json"],
+      "pattern": "provisioner\\s+\"(?:local-exec|remote-exec)\"",
+      "message": "local-exec/remote-exec provisioner runs arbitrary shell on apply (Terraform's arbitrary-code sink) — prefer a provider resource or cloud-init/user_data. If unavoidable, keep the command argv-explicit and free of inline credentials."
+    },
+    {
+      "//": "Pinning minimum_protocol_version (CloudFront viewer cert, API Gateway domain, ELB security policy) to SSLv3 / TLSv1 / TLSv1.1 (or the CloudFront `TLSv1_2016` alias, which is TLS 1.0) negotiates protocols with known weaknesses. The closing quote in the pattern prevents matching the safe `TLSv1.2_2021` / `TLSv1.2` values. Fix: use TLSv1.2_2021 (CloudFront) or TLSv1.2 minimum, TLS 1.3 where supported.",
+      "id": "terraform-weak-tls-policy",
+      "severity": "warn",
+      "include": ["**/*.tf", "**/*.tf.json"],
+      "pattern": "(?:minimum_protocol_version|\"minimum_protocol_version\")\\s*[=:]\\s*\"(?:SSLv3|TLSv1|TLSv1\\.0|TLSv1\\.1|TLSv1_2016)\"",
+      "message": "minimum_protocol_version pinned to a weak policy (SSLv3/TLSv1/TLSv1.1, or the TLSv1_2016 alias = TLS 1.0). Use TLSv1.2_2021 (CloudFront) or TLSv1.2 minimum, TLS 1.3 where supported."
     }
   ]
 }

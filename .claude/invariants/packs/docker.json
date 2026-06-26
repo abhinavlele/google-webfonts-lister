@@ -1,6 +1,6 @@
 {
   "id": "docker",
-  "description": "Container image invariants. Mutable base-image tags let an upstream rebase ship a different binary to production without any change to the Dockerfile — the only deterministic defense is pinning by content digest (@sha256:...). Universal: applies to any repo that builds a container image.",
+  "description": "Container image invariants. Mutable base-image tags let an upstream rebase ship a different binary to production without any change to the Dockerfile — the only deterministic defense is pinning by content digest (@sha256:...). Universal: applies to any repo that builds a container image. Extended with: docker-run-insecure-tls-flag, docker-pip-trusted-host, docker-env-secret-literal, docker-chmod-world-writable, docker-run-sudo, docker-expose-ssh.",
   "rules": [
     {
       "//": "FROM lines referencing external registry images without an @sha256: digest. Catches all forms: tagged (`FROM alpine:3.20`), registry-qualified (`FROM gcr.io/distroless/static-debian12:nonroot`), ARG-parameterized (`FROM ${REGISTRY}/app:1.0`), pure ARG substitutions (`FROM ${BASE_IMAGE}`), and bare untagged names that implicitly pull `:latest` (`FROM alpine`, `FROM ubuntu`). Skips `scratch` and digest-pinned images (already contain @sha256:). Note: multi-stage `FROM <alias>` references (where `<alias>` was defined via `FROM ... AS <alias>`) will be flagged as false positives — use an explicit digest in the base stage definition instead (preferred), or add a `# noqa: docker-from-tag-not-digest-pinned` comment on the PRECEDING line (Dockerfile does not support inline comments; an inline `#` is parsed as part of the instruction). The broad match is intentional: `FROM alpine` is just as dangerous as `FROM alpine:latest`.",
@@ -37,6 +37,60 @@
       "pattern": "^\\s*USER\\s+(?:root|0)(?::\\S+)?\\s*$",
       "flags": "im",
       "message": "Dockerfile sets USER root or USER 0 — verify this is not the final-stage user. Production runtime should run as a non-root uid; use a distroless `:nonroot` base or an explicit non-zero `USER` directive in the final stage."
+    },
+    {
+      "//": "A RUN step that fetches over HTTPS with certificate verification disabled (curl -k / --insecure, wget --no-check-certificate) defeats TLS — the downloaded artifact can be silently swapped by anyone on the path. The short-flag branch is case-sensitive (curl's `-K` is the harmless --config flag; only lowercase `k` is --insecure). `[^|\\n]*` keeps the match on the curl/wget invocation and out of a piped successor. `^\\s*(?!#).*` anchors to the line start, skips comment lines (lines whose first non-whitespace char is `#`), and allows the dangerous flag to appear anywhere on the non-comment line — catching both single-line `RUN curl -k` and multi-line continuation forms. Fix: fetch over verified TLS and check a pinned sha256 of the artifact.",
+      "id": "docker-run-insecure-tls-flag",
+      "severity": "hard",
+      "include": ["**/Dockerfile", "**/Dockerfile.*", "**/*.Dockerfile"],
+      "pattern": "^\\s*(?!#).*(?:(?:curl|wget)\\b[^|\\n]*--insecure\\b|curl\\b[^|\\n]*\\s-[A-Za-z]*k[A-Za-z]*(?:\\s|$)|wget\\b[^|\\n]*--no-check-certificate\\b)",
+      "flags": "m",
+      "message": "Dockerfile RUN downloads with TLS verification disabled (curl -k/--insecure or wget --no-check-certificate) — a network attacker can swap the payload. Fetch over verified TLS and check a pinned sha256."
+    },
+    {
+      "//": "pip install --trusted-host (or an http:// index URL) turns off TLS/cert validation for the package index, so a MITM can serve a malicious wheel. `[^|\\n]*` confines the match to the pip invocation. `^\\s*(?!#).*` anchors to the line start, skips comment lines (lines whose first non-whitespace char is `#`), and allows the dangerous flag to appear anywhere on the non-comment line — catching both single-line `RUN pip install --trusted-host` and multi-line continuation forms. Fix: use the default https index, or pin a private index over verified TLS with hash-checking (--require-hashes).",
+      "id": "docker-pip-trusted-host",
+      "severity": "hard",
+      "include": ["**/Dockerfile", "**/Dockerfile.*", "**/*.Dockerfile"],
+      "pattern": "^\\s*(?!#).*\\bpip[0-9]?\\s+install\\b[^|\\n]*(?:--trusted-host\\b|--index-url[= ]http://|--extra-index-url[= ]http://)",
+      "flags": "im",
+      "message": "Dockerfile RUN pip install uses --trusted-host or an http:// index — this disables index TLS verification and allows a malicious package to be served. Use the default https index (or a private index over verified TLS) and consider --require-hashes."
+    },
+    {
+      "//": "An ENV instruction that assigns a secret-named key a literal value bakes the secret into an image layer permanently — `docker history` and any `docker save` expose it, and it leaks to anyone who can pull the image. The lazy `(?:\\S+\\s+)*?` lets the rule reach a secret token in a multi-key `ENV A=x B=y` line. The negative lookahead skips build-arg references (`$VAR`, `${VAR}`), templating (`{{`), and common placeholders. Path/pointer values like ENV SECRET_FILE=/run/secrets/x will also match — verify it's a pointer, not the secret itself. Fix: pass secrets via BuildKit `--mount=type=secret` (never persisted) or inject at runtime, never ENV. WARN so a confirmed pointer can be annotated.",
+      "id": "docker-env-secret-literal",
+      "severity": "warn",
+      "include": ["**/Dockerfile", "**/Dockerfile.*", "**/*.Dockerfile"],
+      "pattern": "^\\s*ENV\\s+(?:\\S+\\s+)*?[A-Za-z0-9_]*(?:password|passwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key)[A-Za-z0-9_]*\\s*[= ]\\s*[\"']?(?!\\$|\\{\\{|<|change|example|placeholder|dummy|sample|fake|test|todo|xxx|your|redacted)[^\\s\"'#]{4,}",
+      "flags": "im",
+      "message": "Dockerfile ENV assigns a secret-named key a literal value — it is baked into an image layer and exposed by `docker history`. Use BuildKit `--mount=type=secret` at build time or inject at runtime; never ENV. If this is a path/pointer (not the secret), confirm and suppress with a preceding `# noqa: docker-env-secret-literal`."
+    },
+    {
+      "//": "chmod 777 / 666 (or o+w / a+rwx) makes a path world-writable, so any process or compromised user in the container can overwrite it — a privilege-escalation and tamper vector, especially on binaries and config. `^\\s*(?!#).*` skips comment lines and allows the dangerous chmod to appear anywhere on a non-comment line, so multi-line RUN blocks where `chmod 777` appears on a backslash-continuation line are also caught. Ordinary modes (0755, 0644, 0600) do not match. Fix: grant the minimum needed (e.g. 0755 for executables, 0644 for data) and own files by the runtime user.",
+      "id": "docker-chmod-world-writable",
+      "severity": "warn",
+      "include": ["**/Dockerfile", "**/Dockerfile.*", "**/*.Dockerfile"],
+      "pattern": "^\\s*(?!#).*\\bchmod\\b[^|\\n]*\\b(?:0?777|0?666|o\\+w|a\\+rwx|a=rwx)\\b",
+      "flags": "m",
+      "message": "Dockerfile RUN chmod grants world-writable permissions (777/666/o+w) — any in-container process can tamper with the path. Grant the minimum mode (0755 executables, 0644 data) owned by the runtime user."
+    },
+    {
+      "//": "Invoking sudo inside a RUN step signals the build is fighting the USER model — the correct fix is to set USER appropriately and run the command directly, or do privileged setup before dropping privileges. A container shipping the sudo binary also widens the attack surface for a compromised process. `^\\s*(?!#).*\\bsudo\\s+\\S` skips comment lines and catches `sudo` on backslash-continuation lines of multi-line RUN blocks. `\\bsudo\\s+\\S` requires sudo followed by an argument so `\\bsudo` does not fire on `pseudo`. WARN so an unavoidable case can be annotated.",
+      "id": "docker-run-sudo",
+      "severity": "warn",
+      "include": ["**/Dockerfile", "**/Dockerfile.*", "**/*.Dockerfile"],
+      "pattern": "^\\s*(?!#).*\\bsudo\\s+\\S",
+      "flags": "m",
+      "message": "Dockerfile RUN uses sudo — set USER directly and run privileged steps before dropping privileges instead. Shipping sudo also enlarges the attack surface of a compromised container."
+    },
+    {
+      "//": "EXPOSE 22 advertises an SSH port, which almost always means the image runs sshd — an anti-pattern for containers (use `docker exec`/`kubectl exec` for shell access). A running sshd is extra attack surface with its own credential and patching burden. The numeric-skip lets `EXPOSE 8080 22` match the 22 while `EXPOSE 2222` does not (22 must be a whole port token). WARN: a deliberate bastion/jump image can suppress with a preceding `# noqa`.",
+      "id": "docker-expose-ssh",
+      "severity": "warn",
+      "include": ["**/Dockerfile", "**/Dockerfile.*", "**/*.Dockerfile"],
+      "pattern": "^\\s*EXPOSE\\s+(?:[0-9]+(?:/\\w+)?\\s+)*?22(?:/tcp)?(?:\\s|$)",
+      "flags": "im",
+      "message": "Dockerfile EXPOSE 22 advertises SSH — containers should not run sshd; use `docker exec`/`kubectl exec` for shell access. Remove the sshd server and the EXPOSE, or suppress with a preceding `# noqa: docker-expose-ssh` if this is a deliberate bastion image."
     }
   ]
 }
