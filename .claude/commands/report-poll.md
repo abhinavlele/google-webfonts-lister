@@ -15,7 +15,8 @@ You are starting a reporting poll loop that watches for new merges to the `poc` 
 === NATS PoC Report Polling Loop ===
 
 Watching for new merges to origin/poc.
-Reports generated at 4 levels: Technical, Executive, PM Tracker, Architecture.
+Reports generated at 9 cumulative levels (no per-PR reports).
+Tracks: A (NKey), B (OAuth), C (500K). Matrix: Spectrum/Shield x NKey/OAuth.
 
 All work happens in worktree: ../poc-nats-reports
 Main working directory is NEVER modified.
@@ -61,6 +62,7 @@ in `~/.claude/settings.json` (allowedTools) or project `.claude/settings.local.j
 | `gh pr view` | 5 (Collect) | Fetch single PR metadata |
 | `gh pr diff` | 5 (Collect) | Fetch PR diff |
 | `gh pr create` | 9 (Commit) | Create reports PR |
+| `gh pr merge` | 3.5 (Merge Previous) | Auto-merge previous reports PR |
 | `gh api` | 5 (Collect) | Fetch PR comments, cross-repo data |
 | `mkdir` | 4 (Prepare) | Create report directories |
 | `cat` | 5 (Collect) | Read worktree files |
@@ -68,16 +70,18 @@ in `~/.claude/settings.json` (allowedTools) or project `.claude/settings.local.j
 | `python3` | 10 (State) | Update JSON state files |
 | `date` | 4 (Prepare) | Generate branch/directory names |
 | `wc` | 8.5 (Verify) | Check file lengths |
+| `for` | 5 (Collect) | Loop over PRs for batch diff/comment fetching |
+| `head` | 5 (Collect) | Truncate long outputs |
 
 ### Tools Used
 
 | Tool | Purpose |
 |------|---------|
 | Read | Read poll state, cumulative reports, step-progress |
-| Write | Write per-merge reports, update cumulative reports, update state JSON |
+| Write | Update cumulative reports, update state JSON |
 | Edit | Fix issues found during verification |
 | Bash | All commands above |
-| Agent (report-generator) | Spawn 4 parallel report writers |
+| Agent (report-generator) | Spawn up to 9 parallel report writers |
 
 ### Settings Checklist
 
@@ -92,13 +96,14 @@ Verify these entries exist before running:
 
 **`~/.claude/settings.json` -> `permissions.allow`:**
 - `Bash(gh pr view*)`, `Bash(gh pr list*)`, `Bash(gh pr diff*)`
-- `Bash(gh pr create*)`, `Bash(gh api*)`
+- `Bash(gh pr create*)`, `Bash(gh pr merge*)`, `Bash(gh api*)`
 
 **Project `.claude/settings.local.json` -> `permissions.allow`:**
 - `Bash(sleep:*)`, `Bash(git:*)`, `Bash(mkdir:*)`
 - `Bash(cat:*)`, `Bash(python3:*)`, `Bash(date:*)`
-- `Bash(gh pr:*)`, `Bash(gh api:*)`
+- `Bash(gh pr:*)`, `Bash(gh pr merge:*)`, `Bash(gh api:*)`
 - `Bash(git rebase:*)`, `Bash(git push --force-with-lease:*)`
+- `Bash(for:*)`, `Bash(head:*)`
 
 ## Initialize Ralph Loop
 
@@ -190,7 +195,42 @@ Parse PR numbers from merge commit messages (pattern: `Merge pull request #NNN`)
 
 Filter out PRs already in the `processed_prs` array from `.poll-state.json`.
 
-### 3. NO NEW MERGES?
+Filter out any `reports/batch-*` branch PRs from the detected set. These are auto-generated report PRs, not work PRs, and must never be treated as new work to report on (doing so creates a self-triggering loop).
+
+### 3. MERGE PREVIOUS REPORTS PR (EVERY ITERATION)
+
+**This runs on EVERY iteration**, before checking for new merges. Check if there is an open reports PR from a previous iteration. If one exists, merge it so that `origin/poc` has the latest cumulative reports. This prevents agent state drift — without this step, agents check out from `origin/poc` and see stale cumulative data, causing them to revert progress (e.g., Step 3 from 100% back to 75%).
+
+```bash
+gh pr list --base poc --state open --author @me --json number,title,headRefName --jq '.[] | select(.headRefName | startswith("reports/batch-"))'
+```
+
+If a reports PR is found:
+
+1. **Merge it:**
+   ```bash
+   gh pr merge <pr-number> --merge --delete-branch
+   ```
+
+2. **Re-fetch origin/poc** so the worktree checkout in Step 4 includes the merged reports:
+   ```bash
+   git fetch origin poc
+   ```
+
+3. **Log the merge:**
+   ```
+   Merged previous reports PR #<N> into poc before starting new batch.
+   ```
+
+If no open reports PR is found, skip this step silently.
+
+If the merge fails (e.g., conflicts, failed checks), log a warning and continue:
+
+```
+Warning: Could not auto-merge previous reports PR #<N>: <error>. Proceeding with stale origin/poc. Will correct step values in orchestrator verification.
+```
+
+### 3.5. NO NEW MERGES?
 
 If no new merges found after filtering:
 
@@ -203,7 +243,7 @@ Exit this iteration. The Ralph loop hook will re-trigger the next iteration.
 
 ### 4. PREPARE WORKTREE FOR THIS ITERATION
 
-The persistent worktree already exists. Create a new branch for this batch (Step 2 already fetched `origin/poc` — no need to fetch again):
+The persistent worktree already exists. Create a new branch for this batch (Step 2 already fetched `origin/poc`, and Step 3.5 may have merged a previous reports PR and re-fetched):
 
 ```bash
 cd ../poc-nats-reports
@@ -211,14 +251,6 @@ git checkout -B reports/batch-$(date +%Y-%m-%d-%H%M) origin/poc
 ```
 
 This resets the worktree to the latest `origin/poc` and creates a fresh branch for this batch's PR.
-
-Create the per-merge directory:
-
-```bash
-mkdir -p ../poc-nats-reports/reports/per-merge/$(date +%Y-%m-%d)-pr-<NNN>/
-```
-
-If processing multiple PRs, create one directory per PR.
 
 Ensure cumulative and state directories exist:
 
@@ -264,6 +296,11 @@ cat ../poc-nats-reports/reports/cumulative/level1-technical-log.md 2>/dev/null |
 cat ../poc-nats-reports/reports/cumulative/level2-executive-summary.md 2>/dev/null || echo ""
 cat ../poc-nats-reports/reports/cumulative/level3-project-tracker.md 2>/dev/null || echo ""
 cat ../poc-nats-reports/reports/cumulative/level4-architecture-docs.md 2>/dev/null || echo ""
+cat ../poc-nats-reports/reports/cumulative/level5-benchmarks.md 2>/dev/null || echo ""
+cat ../poc-nats-reports/reports/cumulative/level6-performance-decisions.md 2>/dev/null || echo ""
+cat ../poc-nats-reports/reports/cumulative/level7-simulator-guide.md 2>/dev/null || echo ""
+cat ../poc-nats-reports/reports/cumulative/level8-code-walkthrough.md 2>/dev/null || echo ""
+cat ../poc-nats-reports/reports/cumulative/level9-engineering-tldr.md 2>/dev/null || echo ""
 ```
 
 Read Terraform logs from the worktree filesystem:
@@ -321,49 +358,88 @@ Build `cross_repo_prs_enriched` by merging live data onto static entries. For en
 TeamCreate("report-batch")
 ```
 
-Create 4 tasks, one per report level. Each task description must include:
+Create up to 9 tasks, one per report level. Each task description must include:
 - The collected PR data (metadata + diff)
 - The PR review comments and discussion comments (collected in step 5)
 - The worktree path (`../poc-nats-reports`)
-- The per-merge directory path
 - The existing cumulative report content (read in step 5)
 - The step-progress data (from `.step-progress-local.json`)
 - Terraform logs from `infrastructure/terraform/logs/` (read in step 5)
-- Mode: "per-merge"
+- Mode: "cumulative-only" (no per-merge files are generated)
 - `classified_prs` array from step 5.5: `[{ "pr": N, "path": "spectrum"|"nlb"|"shared"|"meta" }, ...]`
 - `cross_repo_prs_enriched` array (live GitHub data merged onto static entries from `pr-classification.json`)
 - `paths` summary from `step-progress.json`
 
-### 7. SPAWN 4 AGENTS IN PARALLEL
+### 7. SPAWN 7 AGENTS IN PARALLEL
 
-Send a SINGLE message with 4 Task tool calls:
+Send a SINGLE message with up to 9 Task tool calls:
 
 ```
 Task(
-  prompt=<Level 1 task with PR data and worktree path>,
+  prompt=<Level 1 task>,
   team_name="report-batch",
   name="level1-writer",
-  subagent_type="general-purpose"
+  subagent_type="report-generator"
 )
 Task(
-  prompt=<Level 2 task with PR data and worktree path>,
+  prompt=<Level 2 task>,
   team_name="report-batch",
   name="level2-writer",
-  subagent_type="general-purpose"
+  subagent_type="report-generator"
 )
 Task(
-  prompt=<Level 3 task with PR data and worktree path>,
+  prompt=<Level 3 task>,
   team_name="report-batch",
   name="level3-writer",
-  subagent_type="general-purpose"
+  subagent_type="report-generator"
 )
 Task(
-  prompt=<Level 4 task with PR data and worktree path>,
+  prompt=<Level 4 task>,
   team_name="report-batch",
   name="level4-writer",
-  subagent_type="general-purpose"
+  subagent_type="report-generator"
+)
+Task(
+  prompt=<Level 5 task>,
+  team_name="report-batch",
+  name="level5-writer",
+  subagent_type="report-generator"
+)
+Task(
+  prompt=<Level 6 task>,
+  team_name="report-batch",
+  name="level6-writer",
+  subagent_type="report-generator"
+)
+Task(
+  prompt=<Level 7 task>,
+  team_name="report-batch",
+  name="level7-writer",
+  subagent_type="report-generator"
+)
+Task(
+  prompt=<Level 8 task>,
+  team_name="report-batch",
+  name="level8-writer",
+  subagent_type="report-generator"
+)
+Task(
+  prompt=<Level 9 task>,
+  team_name="report-batch",
+  name="level9-writer",
+  subagent_type="report-generator"
 )
 ```
+
+**Level 5 (Benchmarks)**: Only spawn if the PR contains load test results, performance metrics, or benchmark data. Skip for pure infrastructure/docs PRs with no performance data.
+
+**Level 6 (Performance Decisions)**: Only spawn if the PR contains a performance-related architectural decision (e.g., changing replica counts, timeout values, routing strategy, caching, resource limits). Skip for pure documentation or meta PRs.
+
+**Level 7 (Simulator & Load Testing Guide)**: Only spawn if the PR touches files in `services/bike-simulator/`, `services/fleet-manager/`, `scripts/bulk-provision/`, `infrastructure/terraform/scripts/run-*-test.sh`, or `infrastructure/terraform/modules/load-test-fleet/`. Also spawn if the PR affects adjacent systems documented in the guide (e.g., auth callout behavior changes that alter the connection flow).
+
+**Level 8 (Code Walkthrough)**: Only spawn if the PR touches Go source files (`.go`) in `services/auth-callout/`, `services/bike-simulator/`, `services/fleet-manager/`, or `scripts/bulk-provision/`. Also spawn if the PR affects configuration that changes how the code behaves (e.g., new env vars, changed Dockerfile). The Level 8 agent MUST read the actual source code files in the worktree (not just the diff) to verify code-level details.
+
+**Level 9 (Engineering TLDR)**: ALWAYS spawn. Every PR batch triggers a full rewrite of `level9-engineering-tldr.md`. The agent reads the existing file plus all current PR data and rewrites the entire document with updated fixed sections (what landed, what's working, what's next, overall progress summary). Do NOT prepend a dated entry — the file is a living snapshot, not a changelog.
 
 Each agent prompt MUST start with:
 
@@ -381,7 +457,6 @@ YOU HAVE FULL AUTHORITY. ACT IMMEDIATELY.
 ```
 
 Then include:
-- The report-generator agent instructions (read from `~/.claude/agents/report-generator.md`)
 - The specific level assignment
 - All PR data
 - Worktree path and file paths
@@ -389,11 +464,11 @@ Then include:
 
 ### 8. WAIT FOR COMPLETION
 
-Messages arrive automatically as agents finish. Wait for all 4 agents to report completion.
+Messages arrive automatically as agents finish. Wait for all agents to report completion (up to 9, depending on which levels were relevant for this PR — Level 9 is always spawned).
 
 ### 8.5. ORCHESTRATOR VERIFICATION (MANDATORY)
 
-After all 4 agents complete, YOU (the orchestrator) must spot-check the cumulative reports before committing. Read the Level 2 executive summary and scan for:
+After all agents complete, YOU (the orchestrator) must spot-check the cumulative reports before committing. Read the Level 2 executive summary and scan for:
 
 ```bash
 # Read the Level 2 cumulative report
@@ -419,10 +494,14 @@ git push -u origin <branch-name>
 gh pr create --base poc --title "Reports: PR #<numbers> batch" --body "$(cat <<'EOF'
 ## Summary
 
-- Level 1: Detailed technical report for PR(s) #<numbers>
+- Level 1: Technical log updated for PR(s) #<numbers>
 - Level 2: Executive summary updated
 - Level 3: Project progress tracker updated
 - Level 4: Architecture documentation updated
+- Level 5: Benchmark results updated (if applicable)
+- Level 6: Performance decision log updated (if applicable)
+- Level 7: Simulator & load testing guide updated (if applicable)
+- Level 8: Code walkthrough updated (if applicable)
 
 ## Report Levels
 
@@ -432,6 +511,11 @@ gh pr create --base poc --title "Reports: PR #<numbers> batch" --body "$(cat <<'
 | 2 | Executive | Generated |
 | 3 | PM Tracker | Generated |
 | 4 | Architecture | Generated |
+| 5 | Benchmarks | Generated / Skipped |
+| 6 | Performance Decisions | Generated / Skipped |
+| 7 | Simulator Guide | Generated / Skipped |
+| 8 | Code Walkthrough | Generated / Skipped |
+| 9 | Engineering TLDR | Generated |
 EOF
 )"
 ```
@@ -475,9 +559,14 @@ If `mergeable` is `CONFLICTING` or the push/PR creation failed:
    cat reports/cumulative/level2-executive-summary.md
    cat reports/cumulative/level3-project-tracker.md
    cat reports/cumulative/level4-architecture-docs.md
+   cat reports/cumulative/level5-benchmarks.md 2>/dev/null || echo ""
+   cat reports/cumulative/level6-performance-decisions.md 2>/dev/null || echo ""
+   cat reports/cumulative/level7-simulator-guide.md 2>/dev/null || echo ""
+   cat reports/cumulative/level8-code-walkthrough.md 2>/dev/null || echo ""
+   cat reports/cumulative/level9-engineering-tldr.md 2>/dev/null || echo ""
    ```
 
-   Regenerate ALL reports (both per-merge and cumulative) on top of the current `origin/poc` state.
+   Regenerate ALL cumulative reports on top of the current `origin/poc` state.
    This is a full regeneration -- the orchestrator writes all files directly (no agents needed for conflict recovery).
 
    Then commit and force-push:
@@ -521,7 +610,7 @@ Use Python or jq to update the JSON. Write the updated content using the Write t
 ### 11. CLEANUP TEAM (Keep Worktree)
 
 ```
-SendMessage(type: "shutdown_request") to all 4 agents
+SendMessage(type: "shutdown_request") to all agents
 TeamDelete()
 ```
 
@@ -540,64 +629,62 @@ After each iteration (whether new merges were processed or not), read `.step-pro
 ```
 === NATS PoC Progress Dashboard ===
 
-Overall: NN% across 10 steps
-▓▓▓▓▓▓░░░░░░░░░░░░░░ 32%
+Track A (NKey — poc cluster):
+  A1. Shield NLB        [··········]   0%  Not started
+  A2. EC2 Fleet         [··········]   0%  Not started
+  A3. External 100K     [··········]   0%  Not started
+  A4. Reconnect/Chaos   [··········]   0%  Not started
+  A5. Observability     [··········]   0%  Not started
+  A6. Documentation     [########··]  80%  Runbooks + guides merged
 
-Step Progress:
-  1. Auth Approach    [##########] 100%  ✓ Complete
-  2. Infrastructure   [#########·]  91%  10/11 merged | 1 open
-  3. Auth Callout     [##········]  25%  K8s infra only, no Go service
-  4. Bike Simulator   [··········]   0%  Not started
-  5. Validation       [··········]   0%  Not started
-  6. Provisioning     [··········]   0%  Not started
-  7. Edge Layer       [##········]  25%  1/4 merged | 3 open
-  8. Benchmark        [··········]   0%  Not started
-  9. Load Testing     [··········]   0%  Not started
- 10. Documentation    [··········]   0%  1 open
+Track B (OAuth — poc-oauth cluster):
+  B1. OAuth Server      [··········]   0%  Not started
+  B2. OAuth Auth Callout[··········]   0%  Not started
+  B3. OAuth Simulator   [··········]   0%  Not started
+  B4. OAuth Infra       [··········]   0%  Not started
+  B5. OAuth 100K        [··········]   0%  Not started
+  B6. OAuth Shield+NLB  [··········]   0%  Not started
+  B7. OAuth Reconnect   [··········]   0%  Not started
+  B8. OAuth Docs        [··········]   0%  Not started
+
+Track C (500K — leaf nodes): Not started
+
+Completed (Steps 0-12):
+  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓ 100%
+  Auth approach, infra, auth callout, simulator, validation,
+  provisioning, benchmarks, load tests (100K in-cluster passed)
+
+4-Combo Matrix:
+  Spectrum+NKey:  In-cluster 100K validated | External pending
+  Shield+NKey:    Not started (Track A)
+  Spectrum+OAuth: Not started (Track B)
+  Shield+OAuth:   Not started (Track B)
 
 Path Progress:
   Spectrum: N merged | M open | K cross-repo — Active
   NLB:      N merged | M open — Pending contract
   Shared:   N merged | M open
 
+Cross-Repo:
+  infra-terraform#1295: <status> (Spectrum config)
+  infra-kubernetes#2897: <status> (Flux CRD)
+
 This Iteration: Processed PR(s) #NN, #NN
 PR: https://github.com/limebike/poc-code-yellow-nats/pull/NN
-Next poll: HH:MM:SS AM/PM ET (in NNs)
+Next poll: HH:MM:SS ET (in NNs)
 ```
 
 **How to render the progress bars:**
 
-For each step, read the `completion_pct` from `.step-progress-local.json`. Render a 10-character bar where each `#` represents 10% filled and `·` represents 10% empty. Use `✓ Complete` suffix for 100% steps.
+For each step in Tracks A, B, C, read `completion_pct` from `.step-progress-local.json`. Render a 10-character bar where each `#` represents 10% filled and `·` represents 10% empty. Use `✓ Complete` suffix for 100% steps.
 
-The overall percentage is `average(completion_pct)` across all 10 steps. This reflects milestone progress, not PR counts.
+The "Completed" section summarizes Steps 0-12 (the original linear plan, now fully done). Show a filled bar at the percentage from `completed_steps_pct` in the step-progress data.
 
-**Path Progress section**: Read the `paths` object from `.step-progress-local.json`. For each path (`spectrum`, `nlb`, `shared`), count merged PRs, open PRs, and cross-repo PRs. Append the path's status (e.g., "Active", "Pending contract"). Example:
+**4-Combo Matrix**: Show the validation status for each of the 4 combinations: Spectrum+NKey, Shield+NKey, Spectrum+OAuth, Shield+OAuth. Each must independently validate 100K concurrent. Read from `combo_matrix` in step-progress data.
 
-```
-Path Progress:
-  Spectrum: 1 merged | 2 open | 1 cross-repo — Active
-  NLB:      2 merged | 1 open — Pending contract
-  Shared:   17 merged | 3 open
-```
+**Path Progress section**: Read the `paths` object from `.step-progress-local.json`. For each path (`spectrum`, `nlb`, `shared`), count merged PRs, open PRs, and cross-repo PRs. Append the path's status.
 
-Include the step notes (abbreviated) after the percentage for context. For steps with 0%, show "Not started" or the relevant note.
-
-**Cross-Repo section** (append after Path Progress):
-
-Read the `cross_repo_prs_enriched` array. For each entry with a non-null `pr`, print:
-
-```
-Cross-Repo:
-  <repo>#<pr>: <status> (<short description>)
-```
-
-Example:
-
-```
-Cross-Repo:
-  infra-terraform#1295: open (Spectrum config)
-  infra-kubernetes#2897: open (Flux CRD)
-```
+**Cross-Repo section**: Read the `cross_repo_prs_enriched` array. For each entry with a non-null `pr`, print status.
 
 If any status transitions occurred during reconciliation (Step 10), append a note:
 
@@ -615,11 +702,6 @@ This Iteration: No new merges detected. Polling...
 
 ```
 Next poll: HH:MM:SS ET (in NNs)
-```
-
-For example:
-```
-Next poll: 5:15:30 PM ET (in 60s)
 ```
 
 ### 13. EXIT ITERATION

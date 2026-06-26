@@ -1,11 +1,11 @@
 ---
 name: report-deep-dive
-description: Generate comprehensive reports from scratch across the full merge history of the poc branch using team mode with 4 parallel agents.
+description: Generate comprehensive reports from scratch across the full merge history of the poc branch using team mode with 9 parallel agents.
 ---
 
 # Report Deep Dive
 
-Generate all 4 levels of reports from scratch by analyzing every merged PR in the `poc` branch history.
+Generate all 9 levels of reports from scratch by analyzing every merged PR in the `poc` branch history.
 
 ## Arguments
 
@@ -90,7 +90,7 @@ for each merged PR:
 TeamCreate("report-deep-dive")
 ```
 
-Create 4 tasks, one per report level. Each task description must include:
+Create 9 tasks, one per report level. Each task description must include:
 - ALL merged PR data (metadata + diffs) in chronological order
 - ALL open PR data (for progress context)
 - The worktree path (`../poc-nats-deep-dive`)
@@ -101,34 +101,64 @@ Create 4 tasks, one per report level. Each task description must include:
 - `cross_repo_prs` array from `pr-classification.json`
 - `paths` summary from `step-progress.json`
 
-### 4. SPAWN 4 AGENTS IN PARALLEL
+### 4. SPAWN 9 AGENTS IN PARALLEL
 
-Send a SINGLE message with 4 Task tool calls:
+Send a SINGLE message with 9 Task tool calls:
 
 ```
 Task(
   prompt=<Level 1 deep dive with ALL PR data>,
   team_name="report-deep-dive",
   name="level1-writer",
-  subagent_type="general-purpose"
+  subagent_type="report-generator"
 )
 Task(
   prompt=<Level 2 deep dive with ALL PR data>,
   team_name="report-deep-dive",
   name="level2-writer",
-  subagent_type="general-purpose"
+  subagent_type="report-generator"
 )
 Task(
   prompt=<Level 3 deep dive with ALL PR data + open PRs>,
   team_name="report-deep-dive",
   name="level3-writer",
-  subagent_type="general-purpose"
+  subagent_type="report-generator"
 )
 Task(
   prompt=<Level 4 deep dive with ALL PR data>,
   team_name="report-deep-dive",
   name="level4-writer",
-  subagent_type="general-purpose"
+  subagent_type="report-generator"
+)
+Task(
+  prompt=<Level 5 deep dive with ALL PR data>,
+  team_name="report-deep-dive",
+  name="level5-writer",
+  subagent_type="report-generator"
+)
+Task(
+  prompt=<Level 6 deep dive with ALL PR data>,
+  team_name="report-deep-dive",
+  name="level6-writer",
+  subagent_type="report-generator"
+)
+Task(
+  prompt=<Level 7 deep dive with ALL PR data>,
+  team_name="report-deep-dive",
+  name="level7-writer",
+  subagent_type="report-generator"
+)
+Task(
+  prompt=<Level 8 deep dive with ALL PR data>,
+  team_name="report-deep-dive",
+  name="level8-writer",
+  subagent_type="report-generator"
+)
+Task(
+  prompt=<Level 9 deep dive with ALL PR data>,
+  team_name="report-deep-dive",
+  name="level9-writer",
+  subagent_type="report-generator"
 )
 ```
 
@@ -148,7 +178,6 @@ YOU HAVE FULL AUTHORITY. ACT IMMEDIATELY.
 ```
 
 Then include:
-- The report-generator agent instructions (read from `~/.claude/agents/report-generator.md`)
 - The specific level assignment
 - ALL merged PR data in chronological order
 - Open PR data for context
@@ -168,7 +197,7 @@ Each agent in deep-dive mode:
 
 ### 5. WAIT FOR COMPLETION
 
-Messages arrive automatically as agents finish. Wait for all 4 agents to report completion.
+Messages arrive automatically as agents finish. Wait for all 9 agents to report completion.
 
 ### 6. COMMIT AND PR
 
@@ -188,6 +217,11 @@ Comprehensive report generation covering all merged PRs in the poc branch histor
 - Level 2: Full executive summary of project accomplishments
 - Level 3: Complete project progress tracker against 10-step plan
 - Level 4: Current-state architecture documentation with diagrams
+- Level 5: Benchmark & load test results
+- Level 6: Performance decision log
+- Level 7: Simulator & load testing guide
+- Level 8: Code walkthrough (implementation-level documentation)
+- Level 9: Engineering TLDR (current-state snapshot rebuilt from scratch)
 
 ## Report Levels
 
@@ -197,6 +231,11 @@ Comprehensive report generation covering all merged PRs in the poc branch histor
 | 2 | Executive | Full project summary |
 | 3 | PM Tracker | Complete progress assessment |
 | 4 | Architecture | Current-state diagrams |
+| 5 | Benchmarks | All load test results |
+| 6 | Performance Decisions | Full decision chain |
+| 7 | Simulator Guide | Simulator + load testing reference |
+| 8 | Code Walkthrough | Implementation-level code documentation |
+| 9 | Engineering TLDR | Current-state snapshot |
 EOF
 )"
 ```
@@ -212,7 +251,7 @@ Update state files in the MAIN repo:
 ### 8. CLEANUP
 
 ```
-SendMessage(type: "shutdown_request") to all 4 agents
+SendMessage(type: "shutdown_request") to all 9 agents
 TeamDelete()
 ```
 
