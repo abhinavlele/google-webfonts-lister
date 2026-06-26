@@ -841,10 +841,20 @@ function compileCustomRules(rules, { lenient = false, source = "rules" } = {}) {
       reject("has an invalid include (must be a glob string or array of them)");
       return;
     }
+    // Optional `exclude` key: glob or array of globs. Files matching any
+    // exclude glob are skipped even if they match an include glob. Silently
+    // ignored if absent or empty so existing rules without the key are unaffected.
+    const rawExclude = r.exclude === undefined ? [] : r.exclude;
+    const excludeGlobs = Array.isArray(rawExclude) ? rawExclude : [rawExclude];
+    if (!excludeGlobs.every((g) => typeof g === "string")) {
+      reject("has an invalid exclude (must be a glob string or array of them)");
+      return;
+    }
     compiled.push({
       id: r.id,
       level: String(r.severity || "warn").toLowerCase() === "hard" ? "HARD" : "WARN",
       includes: includeGlobs.map(globToRegExp),
+      excludes: excludeGlobs.filter(Boolean).map(globToRegExp),
       regex,
       message: r.message,
     });
@@ -858,7 +868,11 @@ function compileCustomRules(rules, { lenient = false, source = "rules" } = {}) {
 const CUSTOM_RULE_WINDOW = 5;
 
 function lintCustomRules(file, lines, customRules, findings) {
-  const active = customRules.filter((rule) => rule.includes.some((re) => re.test(file)));
+  const active = customRules.filter(
+    (rule) =>
+      rule.includes.some((re) => re.test(file)) &&
+      !rule.excludes.some((re) => re.test(file)),
+  );
   if (active.length === 0) return;
   for (let i = 0; i < lines.length; i++) {
     const { line, text, added } = lines[i];
@@ -875,6 +889,75 @@ function lintCustomRules(file, lines, customRules, findings) {
       rule.regex.lastIndex = 0;
       const m = rule.regex.exec(buffer);
       if (m && (m.index < text.length || (text.length === 0 && m.index === 0))) {
+        // Inline suppression: `# noqa: <rule-id>` or `# noqa` on the matched
+        // line silences this finding. Supports Dockerfile (`# noqa`),
+        // shell/YAML comments, and any line where the comment is `# noqa`.
+        // The rule-id form is preferred (`# noqa: docker-from-tag-not-digest-pinned`)
+        // so reviewers can see which rule is being suppressed.
+        // Require `#` before `noqa` so code tokens (e.g. `echo noqa`) are not
+        // mistaken for suppression comments. Both bare (`# noqa`) and rule-id
+        // forms (`# noqa: rule-id`) must start with a `#` comment marker.
+        const noqaAll = /(?:^|\s)#\s*noqa\s*$/i.test(text);
+        // Escape rule.id before using it as regex: dots and other metacharacters
+        // must match literally so `corp.rule` cannot accidentally match `corpXrule`.
+        const escapedId = rule.id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const noqaId = new RegExp(
+          `(?:^|\\s)#\\s*noqa:\\s*${escapedId}(?:\\s|$)`,
+          "i",
+        ).test(text);
+        // Preceding-line suppression: a `# noqa` or `# noqa: <rule-id>`
+        // comment on the line IMMEDIATELY before the matched line also
+        // silences this finding. This is necessary for languages like
+        // Dockerfile where inline `#` is not a comment (it becomes part of
+        // the instruction value), so users cannot add an inline suppression
+        // without corrupting the file.
+        //
+        // Acceptable forms for the preceding line:
+        //   1. A standalone comment line: `# noqa: <id>` (the `#` is the
+        //      first non-whitespace character). This may be added or
+        //      unchanged — it is safe because the comment exists solely to
+        //      grant a suppression and has no other meaning.
+        //   2. An added code+inline-noqa line: `FROM builder # noqa: <id>`
+        //      where `added: true`. This covers multi-stage Dockerfile alias
+        //      references. Because the line was itself added in this diff, the
+        //      author explicitly placed the suppression.
+        //
+        // NOT accepted: an EXISTING (added: false) code line that has an
+        // inline `# noqa` for its OWN violation — this must not silently
+        // carry over to suppress a newly-added violation on the next line.
+        // Example: `FROM builder # noqa: docker-from-tag-not-digest-pinned`
+        // that was already in the file should not suppress a new `FROM`
+        // instruction added immediately after it.
+        //
+        // Only fires when the preceding line number is exactly line-1 (i.e.
+        // it is truly the line above, not a gap in the hunk).
+        const prevLine = i > 0 ? lines[i - 1] : null;
+        const prevIsAdjacent =
+          prevLine != null && prevLine.line === line - 1;
+        const prevIsStandalone =
+          prevIsAdjacent && /^\s*#/.test(prevLine.text);
+        const prevIsAddedInline =
+          prevIsAdjacent && prevLine.added === true && !prevIsStandalone;
+        const prevEligible = prevIsStandalone || prevIsAddedInline;
+        const prevText = prevEligible ? prevLine.text : "";
+        const noqaPrevAll = /(?:^|\s)#\s*noqa\s*$/i.test(prevText);
+        const noqaPrevId = new RegExp(
+          `(?:^|\\s)#\\s*noqa:\\s*${escapedId}(?:\\s|$)`,
+          "i",
+        ).test(prevText);
+        // Go-style suppression: any `//nolint` comment on the matched line
+        // silences this finding, but ONLY for Go files (`.go` extension).
+        // Go files use `//` comments, not `#`, so `# noqa` is not valid Go
+        // syntax. Both bare (`//nolint`) and linter-scoped forms
+        // (`//nolint:gosec`, `//nolint:govet`) are accepted — the linter
+        // names in Go tooling (gosec, govet, ...) differ from invariant-lint
+        // rule ids, so any `//nolint` in a Go file indicates deliberate
+        // developer intent. Restricting to `.go` prevents Terraform HCL,
+        // YAML, and other files that happen to use `//` comments from
+        // accidentally bypassing HARD pack findings.
+        const isGoFile = /\.go$/.test(file);
+        const nolint = isGoFile && /\/\/\s*nolint\b/i.test(text);
+        if (noqaAll || noqaId || noqaPrevAll || noqaPrevId || nolint) continue;
         findings.push({
           level: rule.level,
           rule: rule.id,
@@ -994,7 +1077,7 @@ function main() {
 }
 
 // Named exports for unit testing. Importing this module must NOT run the CLI.
-export { lintMissingTest, checkTestRequirement, resolveMissingTestLevel };
+export { lintMissingTest, checkTestRequirement, resolveMissingTestLevel, lintCustomRules };
 
 // Run main() only when this file is the process entrypoint (invoked directly,
 // e.g. `node invariant-lint.mjs`), never when imported by a test. Prefer the

@@ -18,18 +18,13 @@
 16. Surface assumptions explicitly — ask "What if this is wrong?"
 17. Git worktrees only, never `git checkout` for branch switching
 18. Codex review before any PR create or push: delegate to the `codex-reviewer` sub-agent, which runs the loop (detect base via `gh repo view --json defaultBranchRef --jq .defaultBranchRef.name`, `codex review --base <detected>`, fix, commit, stamp) in isolation and returns a one-line status. Never run `codex review` inline from the main thread — the review output blows the context budget. Never hardcode `main`. Applies to all agents.
+19. **CRITICAL — No LLM tells in PR comments / commits / descriptions.** Write as if a human typed it. Checklist: `rules/pr-comments.md`. No future-action announcements, no Fixed/Discussed/Pending bullet structure, no sycophantic openings, no multi-paragraph essays — short, specific, lead with substance.
 
 ## Codex Review Gate (Enforced)
 
-A `PreToolUse` hook (`~/.claude/hooks/codex_review_gate.py`, registered for `Bash` in `settings.merged.json`) **blocks** `gh pr create ...` and `git push ...` (when the current branch is not the repo default) until a fresh review marker exists for the current `HEAD` SHA.
+A `PreToolUse` hook (`~/.claude/hooks/codex_review_gate.py`) **blocks** `gh pr create` and `git push` (when not on the repo default branch) until a fresh review marker exists for the current `HEAD` SHA. Marker is HEAD-pinned: any new commit invalidates it.
 
-Workflow when blocked: spawn the `codex-reviewer` sub-agent with the target repo dir and detected base branch. The sub-agent does the entire loop (review → fix → commit → repeat ≤5 rounds → stamp `.git/codex-review-ok`) in its own context and reports back `clean: ...` / `failed: ...` / `blocked: ...` in one line. On `clean`, retry the original `gh pr create` / `git push`. On `failed` / `blocked`, surface to the user — do not bypass without explicit approval.
-
-Why the sub-agent: codex review output is large (full diff analysis, all findings) and we run it up to 5 times. Running inline pushes the main conversation past 100% context. The sub-agent isolates that output entirely.
-
-The marker is HEAD-pinned: any new commit invalidates it and forces a fresh review. Bypass for a single command with `SKIP_CODEX_REVIEW=1 <cmd>` (use sparingly, e.g. emergency revert of a broken main).
-
-The `codex-reviewer` sub-agent runs codex via `~/.claude/scripts/codex-isolated.sh` (fresh empty `HOME` per call) so codex's `~/.codex` session store — which `CODEX_HOME` does not govern — can't replay another repo's cached scan; it also checks the review `workdir:` and falls back to isolated `codex exec` on a replay.
+When blocked: spawn the `codex-reviewer` sub-agent (review → fix → commit → repeat ≤5 rounds → stamp `.git/codex-review-ok`). On `clean`, retry. On `failed`/`blocked`, surface to user. Bypass with `SKIP_CODEX_REVIEW=1 <cmd>` sparingly. Codex runs via `~/.claude/scripts/codex-isolated.sh` (fresh empty `HOME`) so `~/.codex` session store can't replay another repo's cached scan.
 
 ## Generation Doctrine (Enforced)
 

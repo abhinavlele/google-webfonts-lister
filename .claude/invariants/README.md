@@ -61,7 +61,8 @@ either side make a requirement a no-op. `enabled: false` disables the check.
 ## Catalog
 
 **Security / correctness** (deterministic half of `generation-doctrine.md`):
-`secrets`, `typescript`, `react`, `cloudflare-workers`, `rails`, `python`.
+`secrets`, `typescript`, `react`, `cloudflare-workers`, `rails`, `python`,
+`go`, `terraform`, `docker`.
 
 **UX** (deterministic half of `ux-doctrine.md`) — the mechanically-checkable
 subset of "good UI":
