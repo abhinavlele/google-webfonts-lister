@@ -1,0 +1,35 @@
+{
+  "id": "go",
+  "description": "Go baseline invariants: no TLS verification bypass, no fmt.Sprintf into database Query/Exec/Prepare, no `sh -c` shell hand-off via os/exec, weak-hash imports flagged. Deliberately conservative — only patterns that are nearly always violations. The fmt.Sprintf-SQL rule overlaps the engine's built-in sql-interpolation (the floor) but is kept here so it fires even when this pack is vendored alone.",
+  "rules": [
+    {
+      "id": "go-tls-insecure-skip-verify",
+      "severity": "hard",
+      "include": "**/*.go",
+      "pattern": "\\bInsecureSkipVerify\\s*(?::|=)\\s*true\\b",
+      "message": "InsecureSkipVerify: true disables TLS certificate validation — issue a properly-signed cert or pin a CA, never bypass verification"
+    },
+    {
+      "//": "Catches fmt.Sprintf used directly as the SQL argument in a Query/Exec/Prepare call on the same line. Note: the line-by-line linter cannot detect multi-line calls where the method opener is on an unmodified line and only the fmt.Sprintf argument line is new in the diff — treat as a known scope limitation and rely on code review for that pattern.",
+      "id": "go-sql-fmt-sprintf-query",
+      "severity": "hard",
+      "include": "**/*.go",
+      "pattern": "\\.(?:(?:Query|QueryRow|Exec|Prepare)\\s*\\(\\s*fmt\\.Sprintf\\s*\\(|(?:QueryContext|QueryRowContext|ExecContext|PrepareContext)\\s*\\(\\s*(?:[a-zA-Z_][\\w.]*(?:\\s*\\([^)]*\\))?\\s*,\\s*)?fmt\\.Sprintf\\s*\\()",
+      "message": "fmt.Sprintf passed to a database Query/Exec/Prepare call — use bound parameters ($1/?), never string-built SQL"
+    },
+    {
+      "id": "go-exec-shell-c",
+      "severity": "hard",
+      "include": "**/*.go",
+      "pattern": "(?<![\\w.])exec\\.(?:Command\\s*\\(|CommandContext\\s*\\(\\s*[a-zA-Z_][\\w.]*(?:\\s*\\([^)]*\\))?\\s*,)\\s*[\"`](?:/bin/)?(?:sh|bash|zsh|ksh)[\"`]\\s*,\\s*[\"`]-[a-zA-Z]*c[a-zA-Z]*[\"`]",
+      "message": "exec.Command(\"sh\", \"-c\"|\"-lc\"|\"-ec\", ...) hands the command line to a shell — call the binary directly with an argv slice (no shell, no interpolation)"
+    },
+    {
+      "id": "go-weak-hash-import",
+      "severity": "warn",
+      "include": "**/*.go",
+      "pattern": "\"crypto/(?:md5|sha1)\"",
+      "message": "import of crypto/md5 or crypto/sha1 — both are broken for security use; ok for non-security checksums (etags, content addressing) but confirm the use case"
+    }
+  ]
+}

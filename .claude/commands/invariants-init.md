@@ -25,6 +25,7 @@ find to rule-pack ids from the catalog (`~/.claude/invariants/packs/`):
 | `requirements.txt` or `pyproject.toml` exists | `python` |
 | renders a UI — deps contain `react`/`vue`/`svelte`/`@angular`/`solid-js`, OR the repo has `**/*.tsx`/`**/*.jsx`/`**/*.vue`/`**/*.svelte` files, OR server-rendered `.erb`/`.html.*` templates | `a11y` |
 | has a design system — Tailwind (`tailwind.config.*`), a tokens/theme dep (`@radix-ui/*`, `styled-components`, `@emotion/*`, `@chakra-ui/*`, a `tokens`/`design-system` package or dir), OR any UI pack was selected above | `design-system` |
+| `go.mod` exists | `go` |
 | always | `secrets` |
 
 Drop redundant ids: `react` and `cloudflare-workers` already extend
@@ -52,7 +53,7 @@ seed the egress allowlist suggestion.
 
 **Cover gaps — prompt to add missing packs to dotfiles.** List the packs that
 actually exist (`ls ~/.claude/invariants/packs/*.json`). If the repo's detected
-stack includes a language/framework with NO matching pack (e.g. `go`, `rust`,
+stack includes a language/framework with NO matching pack (e.g. `rust`,
 `java`, `terraform`, or a framework like `nextjs`/`vue`/`django` lacking its own
 pack), that stack's specific invariants are NOT enforced — the repo gets only
 the universal built-ins plus whatever related packs exist. For EACH gap:
