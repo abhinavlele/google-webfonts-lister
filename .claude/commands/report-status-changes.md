@@ -64,6 +64,8 @@ NOW_ET=$(TZ='America/New_York' date '+%Y-%m-%d %I:%M %p ET')
 
 If `--since` was provided, use that as `CUTOFF` instead.
 
+Store `NOW` as a reference timestamp. When rendering event bullets (merged PRs, opened PRs), compute the relative time between each event's UTC timestamp and `NOW` — e.g., "3h ago", "45m ago", "1d ago". Use human-friendly units (minutes if <1h, hours if <24h, days otherwise).
+
 Print:
 
 ```
@@ -167,19 +169,19 @@ Use this format:
 
 ```markdown
 
-## <NOW_ET>
+## <NOW_ET> (now: <NOW> UTC)
 
 <A 2-4 sentence narrative paragraph summarizing what happened in plain English. Lead with the most important change. Mention specific PR numbers inline. If nothing notable happened, say so honestly — e.g., "Quiet day — mostly housekeeping merges, no progress on open steps." If there were significant changes, be specific: "We closed out Step 2 today — PR #60 was the last piece, fixing the EBS CSI driver and SCP tags. Infrastructure is fully deployed.">
 
 **What merged** (<count> PRs in the last <HOURS>h):
 <for each merged PR, one bullet — group related PRs together with a short narrative intro if 4+>
-- **#<N>** — <title> _(<PATH>)_
+- **#<N>** — <title> _(<PATH>)_ — merged <relative_time, e.g. "3h ago", "45m ago">
 <if none: "Nothing merged in this window.">
 
 <if any PRs opened, include this section:>
 **Newly opened:**
 <for each opened PR>
-- **#<N>** — <title> _(<PATH>)_
+- **#<N>** — <title> _(<PATH>)_ — opened <relative_time, e.g. "3h ago", "45m ago">
 
 <if any PRs closed without merging, include this section:>
 **Closed without merging:**
@@ -208,13 +210,13 @@ Write the updated file using the Write tool.
 Print a Slack-ready message to the terminal that the user can copy-paste directly. Use Slack mrkdwn formatting (`*bold*`, `_italic_`, `•` bullets). This is the primary output of the command.
 
 ```
-*NATS PoC Update* — <NOW_ET>
+*NATS PoC Update* — <NOW_ET> _(now: <NOW> UTC)_
 
 <Same narrative paragraph from the changelog entry, but adapted for Slack. Keep it to 2-3 sentences. Be specific about what matters.>
 
 *What merged* (<count> PRs):
 <for each merged PR>
-• #<N> — <title>
+• #<N> — <title> — _<relative_time, e.g. "3h ago", "45m ago">_
 
 <if step deltas exist:>
 *Progress:*
