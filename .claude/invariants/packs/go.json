@@ -1,6 +1,6 @@
 {
   "id": "go",
-  "description": "Go baseline invariants: no TLS verification bypass, no fmt.Sprintf into database Query/Exec/Prepare, no `sh -c` shell hand-off via os/exec, weak-hash imports flagged. Deliberately conservative — only patterns that are nearly always violations. The fmt.Sprintf-SQL rule overlaps the engine's built-in sql-interpolation (the floor) but is kept here so it fires even when this pack is vendored alone. Extended for SECENG-736 with: go-math-rand-for-tokens, go-context-todo, gosec-g104-globally-excluded, go-tls-insecure-skip-verify-test, go-strings-tolower-secret, go-pkg-errors-deprecated, go-panic-in-production, go-errors-new-with-sprintf, go-ioutil-deprecated, go-des-rc4-crypto.",
+  "description": "Go baseline invariants: no TLS verification bypass, no fmt.Sprintf into database Query/Exec/Prepare, no `sh -c` shell hand-off via os/exec, weak-hash imports flagged. Deliberately conservative — only patterns that are nearly always violations. The fmt.Sprintf-SQL rule overlaps the engine's built-in sql-interpolation (the floor) but is kept here so it fires even when this pack is vendored alone. Extended for SECENG-736 with: go-math-rand-for-tokens, go-context-todo, gosec-g104-globally-excluded, go-tls-insecure-skip-verify-test, go-strings-tolower-secret, go-pkg-errors-deprecated, go-panic-in-production, go-errors-new-with-sprintf, go-ioutil-deprecated, go-des-rc4-crypto. Extended with: go-sql-string-concat-query, go-ssh-ignore-host-key, go-tls-min-version-old, go-rsa-key-too-short, go-jwt-none-alg, go-grpc-with-insecure, go-template-html-unescaped.",
   "rules": [
     {
       "id": "go-tls-insecure-skip-verify",
@@ -135,6 +135,76 @@
       ],
       "pattern": "\"crypto/(des|rc4)\"",
       "message": "crypto/des and crypto/rc4 are broken ciphers — DES has a 56-bit key (brute-forceable), RC4 is forbidden by RFC 7465. Use AES-GCM or ChaCha20-Poly1305 (crypto/aes + crypto/cipher, or golang.org/x/crypto/chacha20poly1305)."
+    },
+    {
+      "//": "Companion to go-sql-fmt-sprintf-query: SQL assembled by string concatenation (`\"SELECT ... \" + userID` or `` `SELECT ...` + userID ``) passed straight into a Query/Exec/Prepare call. Catches the concat form the Sprintf rule misses. The pattern uses two alternations: non-Context variants (Query/QueryRow/Exec/Prepare) require a string literal immediately after `(` with NO optional leading arg — so `db.Query(query, \"prefix\" + value)` does NOT match (the query variable is the SQL, not a context). Context variants (QueryContext etc.) allow an optional leading context arg `(?:[a-zA-Z_][\\w.]*(?:\\s*\\([^)]*\\))?\\s*,\\s*)?` covering both plain identifiers and call expressions like `r.Context()` or `context.Background()`. `(?:\"[^\"]*\"|` + `` `[^`]*` `` + `)\\s*\\+` matches both double-quoted and backtick raw-string literals immediately followed by `+` as the first SQL argument.",
+      "id": "go-sql-string-concat-query",
+      "severity": "hard",
+      "include": [
+        "**/*.go"
+      ],
+      "pattern": "\\.(?:(?:Query|QueryRow|Exec|Prepare)\\s*\\(\\s*|(?:QueryContext|QueryRowContext|ExecContext|PrepareContext)\\s*\\(\\s*(?:[a-zA-Z_][\\w.]*(?:\\s*\\([^)]*\\))?\\s*,\\s*)?)(?:\"[^\"]*\"|`[^`]*`)\\s*\\+",
+      "message": "SQL string built by concatenation (\"...\" + var) passed to a database Query/Exec/Prepare call — use bound parameters ($1/?), never string-built SQL. If concatenating constants, extract to a const string."
+    },
+    {
+      "//": "ssh.InsecureIgnoreHostKey() returns a HostKeyCallback that accepts ANY server key, defeating the host-key check that prevents man-in-the-middle on SSH/SFTP. There is no production use: pin the known host key with ssh.FixedHostKey(pub) or load a knownhosts callback (golang.org/x/crypto/ssh/knownhosts). Test files match too — add `//nolint:gosec // SAFE: <reason>` at the call site if a throwaway test server genuinely needs it.",
+      "id": "go-ssh-ignore-host-key",
+      "severity": "hard",
+      "include": [
+        "**/*.go"
+      ],
+      "pattern": "ssh\\.InsecureIgnoreHostKey\\s*\\(",
+      "message": "ssh.InsecureIgnoreHostKey() accepts any server host key — this enables a trivial MITM on the SSH connection. Pin the key with ssh.FixedHostKey(pub) or use a knownhosts.New(...) callback. If a test genuinely needs it, add `//nolint:gosec // SAFE: <reason>`."
+    },
+    {
+      "//": "A tls.Config that pins MinVersion to TLS 1.0/1.1 or SSL 3.0 negotiates protocols with known breaks (BEAST, POODLE) and is below the modern floor (TLS 1.2). VersionTLS12 is the minimum acceptable; prefer VersionTLS13 for new code. Omitting MinVersion entirely defaults to a safe value in modern Go, so only an EXPLICIT downgrade is flagged.",
+      "id": "go-tls-min-version-old",
+      "severity": "hard",
+      "include": [
+        "**/*.go"
+      ],
+      "pattern": "MinVersion\\s*:\\s*tls\\.(?:VersionSSL30|VersionTLS10|VersionTLS11)\\b",
+      "message": "tls.Config.MinVersion pinned below TLS 1.2 (SSL3.0/TLS1.0/TLS1.1 have known breaks) — set MinVersion: tls.VersionTLS12 (or VersionTLS13 for new code)."
+    },
+    {
+      "//": "rsa.GenerateKey with a bit size below 2048 produces a key that is factorable or close to it — 1024-bit RSA is deprecated by NIST (SP 800-131A), 512/768 are trivially broken. The pattern matches the second argument being 512, 768, or 1024. Use 2048 minimum, 4096 for long-lived keys, or switch to Ed25519 (crypto/ed25519) where the protocol allows.",
+      "id": "go-rsa-key-too-short",
+      "severity": "hard",
+      "include": [
+        "**/*.go"
+      ],
+      "pattern": "rsa\\.GenerateKey\\([^,)]*,\\s*(?:512|768|1024)\\s*\\)",
+      "message": "rsa.GenerateKey with a key size below 2048 bits — 1024-bit RSA is deprecated and 512/768 are broken. Use 2048 minimum (4096 for long-lived keys) or crypto/ed25519."
+    },
+    {
+      "//": "The JWT `none` algorithm declares a token unsigned, so any forged token validates. `UnsafeAllowNoneSignatureType` is the explicit enabler and is always dangerous. `SigningMethodNone` used in a comparison (`== jwt.SigningMethodNone`) is defensive (rejecting unsigned tokens) and is NOT matched; the positive lookahead `(?=\\s*[),])` limits matches to call-argument positions — e.g. `jwt.NewWithClaims(jwt.SigningMethodNone, claims)` or `token.SignedString(jwt.SigningMethodNone)` — which are genuine signing/acceptance paths.",
+      "id": "go-jwt-none-alg",
+      "severity": "hard",
+      "include": [
+        "**/*.go"
+      ],
+      "pattern": "(?:jwt\\.)?SigningMethodNone\\b(?=\\s*[),])|UnsafeAllowNoneSignatureType",
+      "message": "JWT 'none' algorithm (SigningMethodNone as a call argument / UnsafeAllowNoneSignatureType) — any unsigned token will validate, an auth bypass. Verify against a fixed expected signing method (HS256/RS256/EdDSA). A comparison guard (`if method == jwt.SigningMethodNone { return err }`) is defensive and will not match."
+    },
+    {
+      "//": "grpc.WithInsecure() (deprecated) establishes a gRPC connection with no transport security — credentials and payloads cross the wire in plaintext. For a real deployment pass grpc.WithTransportCredentials(credentials.NewTLS(cfg)). For an intentional local/in-cluster plaintext dial, use the explicit insecure.NewCredentials() from google.golang.org/grpc/credentials/insecure and justify it. WARN so a deliberate local dial can be annotated with //nolint.",
+      "id": "go-grpc-with-insecure",
+      "severity": "warn",
+      "include": [
+        "**/*.go"
+      ],
+      "pattern": "grpc\\.WithInsecure\\s*\\(",
+      "message": "grpc.WithInsecure() is deprecated and disables transport security (plaintext gRPC) — use grpc.WithTransportCredentials(credentials.NewTLS(cfg)). For an intentional local plaintext dial, use insecure.NewCredentials() and add `//nolint` with a reason."
+    },
+    {
+      "//": "html/template auto-escapes interpolated values per context; converting a runtime value with template.HTML/JS/CSS/URL/HTMLAttr/JSStr/Srcset tells the engine `this is already safe`, disabling escaping and opening XSS if the value is attacker-influenced. The `[a-zA-Z_]` after the paren matches an identifier (a variable), so a compile-time constant like template.HTML(\"<br>\") (which starts with a quote) does NOT match. WARN: wrapping a genuinely-trusted constant is legitimate — annotate with //nolint and confirm the input is not user-controlled.",
+      "id": "go-template-html-unescaped",
+      "severity": "warn",
+      "include": [
+        "**/*.go"
+      ],
+      "pattern": "\\btemplate\\.(?:HTML|JS|CSS|URL|HTMLAttr|JSStr|Srcset)\\(\\s*[a-zA-Z_]",
+      "message": "template.HTML/JS/CSS/URL(... var ...) converts a runtime value into pre-trusted markup, bypassing html/template's contextual auto-escaping — an XSS sink if the value is user-influenced. Pass the raw value and let the template escape it, or sanitize first. If the input is a trusted constant, add `//nolint` with a justification."
     }
   ]
 }
