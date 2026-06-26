@@ -1,11 +1,12 @@
 {
   "id": "go",
-  "description": "Go baseline invariants: no TLS verification bypass, no fmt.Sprintf into database Query/Exec/Prepare, no `sh -c` shell hand-off via os/exec, weak-hash imports flagged. Deliberately conservative — only patterns that are nearly always violations. The fmt.Sprintf-SQL rule overlaps the engine's built-in sql-interpolation (the floor) but is kept here so it fires even when this pack is vendored alone.",
+  "description": "Go baseline invariants: no TLS verification bypass, no fmt.Sprintf into database Query/Exec/Prepare, no `sh -c` shell hand-off via os/exec, weak-hash imports flagged. Deliberately conservative — only patterns that are nearly always violations. The fmt.Sprintf-SQL rule overlaps the engine's built-in sql-interpolation (the floor) but is kept here so it fires even when this pack is vendored alone. Extended for SECENG-736 with: go-math-rand-for-tokens, go-context-todo, gosec-g104-globally-excluded, go-tls-insecure-skip-verify-test, go-strings-tolower-secret, go-pkg-errors-deprecated, go-panic-in-production, go-errors-new-with-sprintf, go-ioutil-deprecated, go-des-rc4-crypto.",
   "rules": [
     {
       "id": "go-tls-insecure-skip-verify",
       "severity": "hard",
       "include": "**/*.go",
+      "exclude": "**/*_test.go",
       "pattern": "\\bInsecureSkipVerify\\s*(?::|=)\\s*true\\b",
       "message": "InsecureSkipVerify: true disables TLS certificate validation — issue a properly-signed cert or pin a CA, never bypass verification"
     },
@@ -30,6 +31,110 @@
       "include": "**/*.go",
       "pattern": "\"crypto/(?:md5|sha1)\"",
       "message": "import of crypto/md5 or crypto/sha1 — both are broken for security use; ok for non-security checksums (etags, content addressing) but confirm the use case"
+    },
+    {
+      "//": "math/rand is a deterministic PRNG seeded from a small state — never for tokens, ids, key material. crypto/rand is the only correct source for security-sensitive randomness. Test files (path contains _test.go) are matched too — add `//nolint:gosec` with a one-line justification at the use site if the test genuinely needs deterministic randomness.",
+      "id": "go-math-rand-for-tokens",
+      "severity": "warn",
+      "include": [
+        "**/*.go"
+      ],
+      "pattern": "\"math/rand\"",
+      "message": "math/rand is deterministic and predictable — for tokens, UUIDs, session ids, or any security-sensitive randomness use crypto/rand. If this is a non-security use (load shedding, jitter, fuzz), add `//nolint:gosec` with a one-line justification at the import site."
+    },
+    {
+      "//": "context.TODO() is a stub for `we haven't plumbed the context yet`. Shipping it to production means the operation can't be canceled and will leak goroutines on shutdown. Warn-level so a deliberate use can be justified with //nolint.",
+      "id": "go-context-todo",
+      "severity": "warn",
+      "include": [
+        "**/*.go"
+      ],
+      "pattern": "context\\.TODO\\(\\)",
+      "message": "context.TODO() committed — replace with the real upstream context or context.Background() at a clear root."
+    },
+    {
+      "//": "Global gosec G104 suppression silences all unchecked-error findings, including security-sensitive ones (e.g. ignored rand.Read, ignored crypto/hmac.Write). The pattern matches a YAML list-item that IS exactly G104 (`- G104`). WARN-level (not HARD) because `- G104` can also appear under an `includes:` key to ENABLE the check; a single-line regex cannot reliably distinguish exclusion context from inclusion context. Review flagged lines manually — if the `- G104` is under an `issues: exclude-rules:` or a global `suppressions:` block, move it to a path-scoped `exclusions.rules` filter instead. If it is under `includes:` to enable the check, the warning is a false positive and can be ignored.",
+      "id": "gosec-g104-globally-excluded",
+      "severity": "warn",
+      "include": [
+        ".golangci.yml",
+        ".golangci.yaml"
+      ],
+      "pattern": "^\\s*-\\s*G104\\b",
+      "flags": "m",
+      "message": "G104 appears as a bare YAML list item in golangci config — verify whether this is suppressing G104 (bad: silences unchecked-error security findings) or enabling it (fine). If suppressing, move to `exclusions.rules` with a `path: _test\\\\.go$` filter; add per-site `//nolint:gosec // G104: <reason>` where deliberate. If enabling, this warning is a false positive."
+    },
+    {
+      "//": "Warn-level companion to go-tls-insecure-skip-verify: test files that set InsecureSkipVerify=true should document why (local self-signed cert) so reviewers can confirm the scope is intentional.",
+      "id": "go-tls-insecure-skip-verify-test",
+      "severity": "warn",
+      "include": [
+        "**/*_test.go"
+      ],
+      "pattern": "InsecureSkipVerify\\s*(?::|=)\\s*true",
+      "message": "tls.Config.InsecureSkipVerify = true in a test file — acceptable for local self-signed servers, but add a comment explaining the cert setup so reviewers can confirm scope."
+    },
+    {
+      "//": "Case-folding secret material before comparison weakens it: strings.ToLower(password) collapses 26 distinct uppercase characters into their lowercase equivalents, halving the effective alphabet for that position. Worse, it often signals a buggy case-insensitive comparison of credentials (which should be byte-exact, constant-time). Pattern catches `strings.ToLower(...password...)`, `...secret...`, `...token...`, `...api_key/apikey/api-key...` on a single line. Case-insensitive (`i` flag) so PASSWORD/Password/password all match. Fix: compare with subtle.ConstantTimeCompare on the raw bytes; do NOT case-fold credentials.",
+      "id": "go-strings-tolower-secret",
+      "severity": "hard",
+      "include": [
+        "**/*.go"
+      ],
+      "pattern": "strings\\.ToLower\\([^)]*(?:password|secret|token|api[_-]?key)[^)]*\\)",
+      "flags": "i",
+      "message": "strings.ToLower applied to secret-like material (password/secret/token/api_key) — case-folding weakens the comparison and is almost always a bug. Compare credentials byte-exact with subtle.ConstantTimeCompare; case-fold only non-secret identifiers."
+    },
+    {
+      "//": "github.com/pkg/errors is deprecated since Go 1.13 — the standard library's fmt.Errorf with the %w verb (and errors.Is/errors.As/errors.Unwrap) is the modern idiom. Mixing both leads to confusing wrap chains and surprising behavior under errors.Is. Fix: replace `errors.Wrap(err, \"ctx\")` with `fmt.Errorf(\"ctx: %w\", err)`, `errors.WithStack` with bare returns or fmt.Errorf, and update imports.",
+      "id": "go-pkg-errors-deprecated",
+      "severity": "warn",
+      "include": [
+        "**/*.go"
+      ],
+      "pattern": "\"github\\.com/pkg/errors\"",
+      "message": "github.com/pkg/errors is deprecated since Go 1.13 — use stdlib fmt.Errorf with %w and errors.Is/As/Unwrap. Replace `errors.Wrap(err, msg)` with `fmt.Errorf(\"%s: %w\", msg, err)`."
+    },
+    {
+      "//": "panic() in production code crashes the whole process — fine for impossible-state assertions, wrong for normal errors that should propagate as `error` values. The pattern matches lines that START with whitespace then `panic(` — i.e. a panic inside a function body, not a top-level `var _ = panic(...)`. WARN-level because test files and legitimate `panic` (init-time invariant checks, recovered worker boundaries) also match — opt out per-site with `//nolint:govet // SAFE: <reason>` explaining why a panic is correct here.",
+      "id": "go-panic-in-production",
+      "severity": "warn",
+      "include": [
+        "**/*.go"
+      ],
+      "pattern": "^\\s+panic\\(",
+      "flags": "m",
+      "message": "panic() inside a function body — for normal error paths return an `error` instead; panic should be reserved for impossible-state assertions and recovered worker boundaries. If this panic is intentional (init-time check, assertion), add `//nolint:govet // SAFE: <reason>` on the same line. Test files match too — same opt-out."
+    },
+    {
+      "//": "errors.New(fmt.Sprintf(...)) is a tell that someone wanted fmt.Errorf and reached for the wrong constructor. fmt.Errorf is the idiomatic form and, with %w, supports error wrapping that errors.New does not. Mechanical fix: replace `errors.New(fmt.Sprintf(format, args...))` with `fmt.Errorf(format, args...)`.",
+      "id": "go-errors-new-with-sprintf",
+      "severity": "hard",
+      "include": [
+        "**/*.go"
+      ],
+      "pattern": "errors\\.New\\(\\s*fmt\\.Sprintf\\(",
+      "message": "errors.New(fmt.Sprintf(...)) — collapse to fmt.Errorf(...) which is idiomatic and supports %w error wrapping."
+    },
+    {
+      "//": "io/ioutil was deprecated in Go 1.16; every symbol has a stdlib replacement: ioutil.ReadAll → io.ReadAll, ioutil.ReadFile/WriteFile → os.ReadFile/WriteFile, ioutil.ReadDir → os.ReadDir, ioutil.TempDir/TempFile → os.MkdirTemp/CreateTemp, ioutil.NopCloser → io.NopCloser, ioutil.Discard → io.Discard. New code should not import it.",
+      "id": "go-ioutil-deprecated",
+      "severity": "warn",
+      "include": [
+        "**/*.go"
+      ],
+      "pattern": "\"io/ioutil\"",
+      "message": "io/ioutil is deprecated since Go 1.16 — use io/os equivalents (io.ReadAll, os.ReadFile/WriteFile, os.ReadDir, os.MkdirTemp/CreateTemp, io.NopCloser, io.Discard)."
+    },
+    {
+      "//": "DES (56-bit key) and RC4 (broken stream cipher) are cryptographically dead — RC4 is forbidden by RFC 7465 in TLS, DES has been brute-forceable since the 1990s. No legitimate new use exists. Fix: AES-GCM or ChaCha20-Poly1305 for symmetric encryption.",
+      "id": "go-des-rc4-crypto",
+      "severity": "hard",
+      "include": [
+        "**/*.go"
+      ],
+      "pattern": "\"crypto/(des|rc4)\"",
+      "message": "crypto/des and crypto/rc4 are broken ciphers — DES has a 56-bit key (brute-forceable), RC4 is forbidden by RFC 7465. Use AES-GCM or ChaCha20-Poly1305 (crypto/aes + crypto/cipher, or golang.org/x/crypto/chacha20poly1305)."
     }
   ]
 }

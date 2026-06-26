@@ -1,0 +1,71 @@
+{
+  "id": "terraform",
+  "description": "Terraform / HCL invariants. Catches publicly-exposed ACLs, wide-open security groups, deletion-unprotected stateful resources, and inline secret strings. Apply to any Terraform repo.",
+  "rules": [
+    {
+      "//": "S3 buckets with public ACLs are a frequent cause of data leaks. The correct pattern is private ACL + explicit bucket policy if exposure is genuinely required. Pattern covers HCL (`acl = \"public-read\"`) and Terraform JSON (`\"acl\": \"public-read\"`).",
+      "id": "terraform-public-s3-acl",
+      "severity": "hard",
+      "include": ["**/*.tf", "**/*.tf.json"],
+      "pattern": "(?:acl\\s*=|\"acl\"\\s*:)\\s*\"(public-read|public-read-write)\"",
+      "message": "S3 bucket configured with public ACL. Use private ACL plus an explicit bucket policy if exposure is genuinely required."
+    },
+    {
+      "//": "0.0.0.0/0 ingress on a security group is sometimes correct (public-facing LB) but is far more often a misconfig. Warn level so the author confirms intent. Pattern matches the CIDR anywhere in the array value, covering HCL and Terraform JSON.",
+      "id": "terraform-cidr-anywhere",
+      "severity": "warn",
+      "include": ["**/*.tf", "**/*.tf.json"],
+      "pattern": "\"0\\.0\\.0\\.0/0\"",
+      "message": "Security group rule open to 0.0.0.0/0. Confirm this is genuinely public-facing; otherwise scope to known CIDRs or a security-group source."
+    },
+    {
+      "//": "RDS/Aurora deletion protection MUST be on for durable data stores. Catches `deletion_protection = false` (HCL) and `\"deletion_protection\": false` (Terraform JSON) literals. The negative lookbehind `(?<![a-zA-Z_])` anchors the match so that `enable_deletion_protection = false` (aws_lb attribute) is NOT matched — the `_` before `deletion_protection` disqualifies it. The affirmative case is not enforced; use Terraform Sentinel or OPA for presence-enforcement.",
+      "id": "terraform-deletion-protection-disabled",
+      "severity": "hard",
+      "include": ["**/*.tf", "**/*.tf.json"],
+      "pattern": "(?<![a-zA-Z_])(?:deletion_protection\\s*=|\"deletion_protection\"\\s*:)\\s*false",
+      "message": "deletion_protection = false on a Terraform resource. Stateful resources (RDS, Aurora, DynamoDB) must keep deletion protection enabled in production; set deletion_protection = true. Do not simply omit the field — the provider default is false for most resources."
+    },
+    {
+      "//": "An aws_kms_key with prevent_destroy explicitly set to false can be removed via `terraform destroy` — devastating for data encrypted with that CMK. Detects the explicit `prevent_destroy = false` or `\\\"prevent_destroy\\\": false` literal near an aws_kms_key resource. Omission of prevent_destroy is not flagged (the linter cannot do full block-scope analysis); use Terraform Sentinel or OPA for presence-enforcement.",
+      "id": "terraform-kms-key-no-prevent-destroy",
+      "severity": "warn",
+      "include": ["**/*.tf", "**/*.tf.json"],
+      "pattern": "(?:prevent_destroy|\"prevent_destroy\")\\s*[=:]\\s*false",
+      "message": "prevent_destroy = false on a resource — KMS keys and other durable resources must not have prevent_destroy explicitly disabled. Set prevent_destroy = true in the lifecycle block. Do not simply remove the false line — omission defaults to false, leaving the resource destroyable."
+    },
+    {
+      "//": "Hardcoded credentials in HCL or Terraform JSON. Detects `password = \"<8+ chars>\"` (HCL) and `\"password\": \"<8+ chars>\"` (JSON) literals, with common placeholder strings excluded.",
+      "id": "terraform-hardcoded-password",
+      "severity": "hard",
+      "include": ["**/*.tf", "**/*.tf.json"],
+      "pattern": "(?:(?:password|secret_key|api_key|access_key)\\s*=|\"(?:password|secret_key|api_key|access_key)\"\\s*:)\\s*\"(?!\\$\\{|var\\.|local\\.|data\\.|(?:change|example|placeholder|dummy|sample|fake|test|todo|xxx|your|redacted))[^\"]{8,}\"",
+      "flags": "i",
+      "message": "Credential assigned a string literal in Terraform — load from a variable, data source (aws_secretsmanager_secret_version), or environment. Rotate the value immediately if it was committed."
+    },
+    {
+      "//": "Inline IAM policy with `Action: *` and `Resource: *` is the IAM equivalent of root. Warn-level because a service-linked role legitimately needs it occasionally. Pattern covers JSON-style (`\"Action\": \"*\"` or `\"Action\": [\"*\"]`), HCL jsonencode (`Action = \"*\"` or `Action = [\"*\"]`), and YAML-in-heredoc forms. A wildcard array `[\"*\"]` is semantically identical to a scalar `\"*\"` in IAM. Two alternating branches match both field orderings (Action before Resource, and Resource before Action) because JSON/HCL object key order is not semantic. Scope limitation: the line-by-line linter matches this multi-line regex against each ADDED line; it fires when both wildcards appear in the forward window of the added line. For the case where only the second wildcard field is newly added (the other pre-exists in the file), the two single-field companion rules below (`terraform-iam-wildcard-action` / `terraform-iam-wildcard-resource`) catch it independently.",
+      "id": "terraform-iam-wildcard-action-and-resource",
+      "severity": "warn",
+      "include": ["**/*.tf", "**/*.tf.json"],
+      "pattern": "(?:(?:\"Action\"|Action)\\s*[=:]\\s*(?:\\[\\s*)?\"\\*\"(?:\\s*\\])?[\\s\\S]{0,300}(?:\"Resource\"|Resource)\\s*[=:]\\s*(?:\\[\\s*)?\"\\*\"(?:\\s*\\])?|(?:\"Resource\"|Resource)\\s*[=:]\\s*(?:\\[\\s*)?\"\\*\"(?:\\s*\\])?[\\s\\S]{0,300}(?:\"Action\"|Action)\\s*[=:]\\s*(?:\\[\\s*)?\"\\*\"(?:\\s*\\])?)",
+      "message": "IAM policy with Action=\"*\" (or [\"*\"]) AND Resource=\"*\" (or [\"*\"]) — scope at least one dimension (action set OR resource ARN pattern). Document the rationale if this is service-linked / break-glass."
+    },
+    {
+      "//": "Companion to terraform-iam-wildcard-action-and-resource: catches a newly added `Action = \"*\"` line even when `Resource = \"*\"` is already present (pre-existing) in the same policy block — a case the multi-line rule misses because the pre-existing line is not in the added-lines window.",
+      "id": "terraform-iam-wildcard-action",
+      "severity": "warn",
+      "include": ["**/*.tf", "**/*.tf.json"],
+      "pattern": "(?:\"Action\"|\\bAction)\\s*[=:]\\s*(?:\\[\\s*)?\"\\*\"(?:\\s*\\])?",
+      "message": "IAM Action wildcard (\"*\") added — verify that Resource is also scoped (not \"*\"). A full Action=*/Resource=* grant is the IAM equivalent of root; document the rationale for any service-linked / break-glass role."
+    },
+    {
+      "//": "Companion to terraform-iam-wildcard-action-and-resource: catches a newly added `Resource = \"*\"` line even when `Action = \"*\"` is already present (pre-existing) in the same policy block — a case the multi-line rule misses because the pre-existing line is not in the added-lines window.",
+      "id": "terraform-iam-wildcard-resource",
+      "severity": "warn",
+      "include": ["**/*.tf", "**/*.tf.json"],
+      "pattern": "(?:\"Resource\"|\\bResource)\\s*[=:]\\s*(?:\\[\\s*)?\"\\*\"(?:\\s*\\])?",
+      "message": "IAM Resource wildcard (\"*\") added — verify that Action is also scoped (not \"*\"). A full Action=*/Resource=* grant is the IAM equivalent of root; document the rationale for any service-linked / break-glass role."
+    }
+  ]
+}

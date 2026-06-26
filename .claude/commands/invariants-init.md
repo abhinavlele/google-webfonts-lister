@@ -23,6 +23,9 @@ find to rule-pack ids from the catalog (`~/.claude/invariants/packs/`):
 | `package.json` deps/devDeps contain `typescript` (or any `tsconfig.json`) | `typescript` |
 | `Gemfile` exists | `rails` |
 | `requirements.txt` or `pyproject.toml` exists | `python` |
+| `go.mod` exists (or any `**/*.go` files) | `go` |
+| any `**/*.tf` or `**/*.tf.json` files exist | `terraform` |
+| any `**/Dockerfile`, `**/Dockerfile.*`, or `**/*.Dockerfile` files exist | `docker` |
 | renders a UI — deps contain `react`/`vue`/`svelte`/`@angular`/`solid-js`, OR the repo has `**/*.tsx`/`**/*.jsx`/`**/*.vue`/`**/*.svelte` files, OR server-rendered `.erb`/`.html.*` templates | `a11y` |
 | has a design system — Tailwind (`tailwind.config.*`), a tokens/theme dep (`@radix-ui/*`, `styled-components`, `@emotion/*`, `@chakra-ui/*`, a `tokens`/`design-system` package or dir), OR any UI pack was selected above | `design-system` |
 | `go.mod` exists | `go` |
