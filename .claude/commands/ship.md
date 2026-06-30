@@ -1,6 +1,6 @@
 ---
 name: ship
-description: Autonomously ship a feature as one or more PR-sized units — decompose, then per unit spawn an Opus implementer sub-agent (AUTO-ACCEPT + generation doctrine + full gate), run the Sonnet codex-reviewer, adjudicate its output on Opus, open the PR, verify CI/deploy, squash-merge, and clean up. Derived from the proven Fable orchestration loop, on enabled models with deliberate cost tiering.
+description: Autonomously ship a feature as one or more PR-sized units — decompose, then per unit spawn an Opus implementer sub-agent (AUTO-ACCEPT + generation doctrine + full gate), run the Sonnet codex-reviewer + security-reviewer, adjudicate their output on Opus, open the PR, verify CI/deploy, squash-merge, and clean up. Derived from the proven Fable orchestration loop, on enabled models with deliberate cost tiering.
 ---
 
 # /ship — autonomous PR-by-PR delivery
@@ -13,9 +13,10 @@ with explicit model routing.
 **Model routing (the whole point — autonomy + quality, cheaper than Fable):**
 - Planning deliberation → `deliberate-analyst` (Opus), *conditionally* (below).
 - Each PR implementer → `general-purpose` (Opus) — quality where it pays.
-- `codex-reviewer` (Sonnet) — cheap, mechanical: runs `codex`, fixes, stamps.
-- **Adjudication of codex's output → you, Opus** — a strong model signs off on
-  what the cheap loop produced, without the raw codex dump entering context.
+- `codex-reviewer` (Sonnet) — cheap, mechanical: runs `codex`, fixes, stamps `.git/codex-review-ok`.
+- `security-reviewer` (Sonnet) — threat-model gate: auth/authz, secrets, egress, stamps `.git/security-review-ok`.
+- **Adjudication of both reviewers' output → you, Opus** — a strong model signs off on
+  what the cheap loops produced, without raw output entering context.
 
 **Flags** (parse from `$ARGUMENTS`):
 - `--plan-only` — decompose and print the plan; build nothing.
@@ -94,23 +95,33 @@ open a PR.
 
 On `failed`/`blocked`, surface to the user — do not bypass without approval.
 
-### 1d. Adjudicate codex's output (you, Opus)
-After codex-reviewer returns `clean`, do NOT blindly trust it. Review:
+### 1c2. Security review (Sonnet) — the threat-model gate
+After codex-reviewer stamps `.git/codex-review-ok`, spawn the `security-reviewer`
+agent. Give it the worktree path and detected base. It reviews the threat-model
+dimensions (auth/authz, secret/PII leakage, egress, mirror-ops, test-integrity,
+PR-doctrine), applies fixes, commits, and stamps `.git/security-review-ok`,
+returning a single one-line outcome. Both markers must be present for the push
+gate to pass; running security-reviewer before `git push` is mandatory.
+
+On `failed`/`blocked`, surface to the user — do not bypass without approval.
+
+### 1d. Adjudicate both reviewers' output (you, Opus)
+After both reviewers return `clean`, do NOT blindly trust them. Review:
 ```bash
 git -C <worktree> log --oneline origin/<default>..HEAD
-git -C <worktree> diff "$IMPL_SHA"..HEAD   # the codex fix commits (SHA from 1b)
+git -C <worktree> diff "$IMPL_SHA"..HEAD   # the review-fix commits (SHA from 1b)
 ```
-Judge: are the fixes correct and complete? Did codex flag a false positive that
-got "fixed" wrongly, or miss something the diff still has? If the fixes are
-unsound, send codex-reviewer back with specifics, or correct them yourself and
-re-run the gate. Only proceed when you, on Opus, are satisfied. This is the
-quality tier that replaces trusting a single cheap pass.
+Judge: are the fixes correct and complete? Did either reviewer flag a false
+positive that got "fixed" wrongly, or miss something the diff still has? If any
+fix is unsound, send the relevant reviewer back with specifics, or correct it
+yourself and re-run that gate. Only proceed when you, on Opus, are satisfied.
 
 ### 1e. PR → verify → merge → clean up
-The codex gate marker is per-worktree (stamped in the linked worktree's git
-dir), so run BOTH the push and the PR creation from inside `<worktree>` — the
-review-gate hook checks the marker in the invoking checkout's git dir, and from
-the main checkout it would not see the worktree's marker and would block:
+Both gate markers (`codex-review-ok` and `security-review-ok`) are per-worktree
+(stamped in the linked worktree's git dir), so run BOTH the push and the PR
+creation from inside `<worktree>` — the review-gate hooks check the markers in
+the invoking checkout's git dir, and from the main checkout they would not see
+the worktree's markers and would block:
 ```bash
 git -C <worktree> push -u origin <branch>
 ( cd <worktree> && gh pr create --base <default> --head <branch> --title "…" --body "…" )
@@ -150,6 +161,6 @@ skipped or a check is still pending, say so.
 This is the loop that built the project on Fable (main loop orchestrating;
 per-PR implementer sub-agents with an AUTO-ACCEPT preamble; codex-reviewer
 gate), with the engine reassigned: Opus where capability pays (implement +
-adjudicate), Sonnet for the mechanical codex loop. Quality comes from the gates
-(self-review → codex → Opus adjudication → CI/deploy), not the model — so it
-reproduces the autonomy and quality at lower cost than Fable.
+adjudicate), Sonnet for the mechanical review loops. Quality comes from the gates
+(self-review → codex → security → Opus adjudication → CI/deploy), not the model
+— so it reproduces the autonomy and quality at lower cost than Fable.

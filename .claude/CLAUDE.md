@@ -17,14 +17,19 @@
 15. Checkpoint verification after each phase of multi-step work
 16. Surface assumptions explicitly — ask "What if this is wrong?"
 17. Git worktrees only, never `git checkout` for branch switching
-18. Codex review before any PR create or push: delegate to the `codex-reviewer` sub-agent, which runs the loop (detect base via `gh repo view --json defaultBranchRef --jq .defaultBranchRef.name`, `codex review --base <detected>`, fix, commit, stamp) in isolation and returns a one-line status. Never run `codex review` inline from the main thread — the review output blows the context budget. Never hardcode `main`. Applies to all agents.
+18. Two-reviewer gate before any PR create or push: delegate to BOTH `codex-reviewer` (local correctness) and `security-reviewer` (project-aware threat-model) sub-agents. Independent markers `codex-review-ok` + `security-review-ok`, both must be fresh for HEAD. Never run `codex review` inline. Never hardcode `main`.
 19. **CRITICAL — No LLM tells in PR comments / commits / descriptions.** Write as if a human typed it. Checklist: `rules/pr-comments.md`. No future-action announcements, no Fixed/Discussed/Pending bullet structure, no sycophantic openings, no multi-paragraph essays — short, specific, lead with substance.
 
-## Codex Review Gate (Enforced)
+## Review Gates (Enforced)
 
-A `PreToolUse` hook (`~/.claude/hooks/codex_review_gate.py`) **blocks** `gh pr create` and `git push` (when not on the repo default branch) until a fresh review marker exists for the current `HEAD` SHA. Marker is HEAD-pinned: any new commit invalidates it.
+Two sibling `PreToolUse` hooks block `gh pr create` and `git push` (non-default branch) until BOTH markers are fresh for HEAD:
 
-When blocked: spawn the `codex-reviewer` sub-agent (review → fix → commit → repeat ≤5 rounds → stamp `.git/codex-review-ok`). On `clean`, retry. On `failed`/`blocked`, surface to user. Bypass with `SKIP_CODEX_REVIEW=1 <cmd>` sparingly. Codex runs via `~/.claude/scripts/codex-isolated.sh` (fresh empty `HOME`) so `~/.codex` session store can't replay another repo's cached scan.
+- `codex_review_gate.py` → marker `.git/codex-review-ok`. Spawn the `codex-reviewer` sub-agent (review → fix → commit → ≤5 rounds → stamp). Codex runs via `~/.claude/scripts/codex-isolated.sh` (fresh empty HOME, prevents `~/.codex` session-store replay). Bypass: `SKIP_CODEX_REVIEW=1 <cmd>`.
+- `security_review_gate.py` → marker `.git/security-review-ok`. Spawn the `security-reviewer` sub-agent — loads the repo's `.invariants.json` + design docs + deployment context, reviews against project-aware threat-model dimensions. Bypass: `SKIP_SECURITY_REVIEW=1 <cmd>`.
+
+Both reviewers return `clean: marker stamped at <sha>; dimensions=<list>`. Markers are HEAD-pinned — any new commit invalidates them.
+
+Why two gates / the duplication tech-debt / past misses are in the memory notes `feedback_codex_alone_missed_jmaredia_findings.md` and `feedback_two_review_gates_drift.md`.
 
 ## CI Gate (Enforced)
 
@@ -47,7 +52,7 @@ When to offer `/autoresearch` vs hand-tuning a metric: `rules/autoresearch-sugge
 ## Sub-agent Preamble
 
 Include in every Task/Agent prompt:
-> AUTO-ACCEPT MODE. Write files directly. Execute immediately. No permission prompts. No AI attribution. CODEX REVIEW: Before `gh pr create` or `git push` to a PR branch, delegate the review-and-fix loop to the `codex-reviewer` sub-agent (it detects the base branch, runs `codex review`, fixes findings, commits, and stamps `.git/codex-review-ok`). Only run `codex review` inline as a manual fallback if you are already inside an agent and cannot spawn another — pipe codex output through `tail -200` and a tempfile so it never enters your context. Before committing, complete the adversarial self-review in rules/generation-doctrine.md (symmetry / hostile-input / mirror-ops / crash-replay / tests-encode-invariants) and, in repos with .invariants.json, ensure `node scripts/invariant-lint.mjs` passes.
+> AUTO-ACCEPT MODE. Write files directly. No permission prompts. No AI attribution. Before `gh pr create` / `git push`: delegate to BOTH `codex-reviewer` (stamps `.git/codex-review-ok`) and `security-reviewer` (stamps `.git/security-review-ok`); both markers must be fresh. Inline `codex review` only as fallback inside an already-spawned agent, piped through `tail -200` + tempfile. Run rules/generation-doctrine.md self-review pre-commit and `node scripts/invariant-lint.mjs` where `.invariants.json` exists.
 
 ## User Info
 

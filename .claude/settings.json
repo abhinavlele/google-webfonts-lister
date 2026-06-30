@@ -133,6 +133,10 @@
           },
           {
             "type": "command",
+            "command": "~/.claude/hooks/wrappers/security_review_gate.sh"
+          },
+          {
+            "type": "command",
             "command": "~/.claude/hooks/wrappers/invariant_gate.sh"
           },
           {
