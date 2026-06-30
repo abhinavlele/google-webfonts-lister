@@ -38,14 +38,13 @@ You are the Codex review gate runner. Your sole job is to bring the current bran
       ~/.claude/scripts/codex-isolated.sh review -m gpt-5.5 --base "$BASE" > "$LOG" 2>&1
       ```
       Capture the returned shell id (call it `CODEX_SH`).
-   2. Poll until codex exits. Loop:
-      - Sleep ~30s in a foreground Bash call (`sleep 30`). Combine with a status snapshot in the same call so the user sees one line per poll, e.g.
+   2. Poll until codex exits, using an **adaptive interval** — most reviews finish inside the first ~2 minutes, so poll tightly early and back off after to avoid burning wall-clock on the tail. Sleep `10`s per poll while elapsed `< 120`s, then `30`s once past 120s. Track elapsed seconds yourself (sum of the sleeps). Combine the sleep with a status snapshot in the same Bash call so the user sees one line per poll, e.g.
         ```
-        sleep 30 && printf 'round %s | %ss elapsed | log lines: %s\n' "$ROUND" "$ELAPSED" "$(wc -l < "$LOG")" && tail -n 2 "$LOG" | sed 's/^/  · /'
+        sleep "$INTERVAL" && printf 'round %s | %ss elapsed | log lines: %s\n' "$ROUND" "$ELAPSED" "$(wc -l < "$LOG")" && tail -n 2 "$LOG" | sed 's/^/  · /'
         ```
-        These lines appear in the agent's task panel. Keep them short.
+        where `INTERVAL=10` until `ELAPSED>=120`, then `INTERVAL=30`. These lines appear in the agent's task panel. Keep them short.
       - Call `BashOutput(bash_id=$CODEX_SH)` to check status. When `BashOutput` reports the shell has exited, capture the exit code (`RC`).
-      - If polling has run for >15 minutes (30 polls), call `KillBash(shell_id=$CODEX_SH)` and return `failed: codex review timeout after 15min — see /tmp/codex-reviewer-current.log`.
+      - If accumulated elapsed time exceeds 15 minutes (900s), call `KillBash(shell_id=$CODEX_SH)` and return `failed: codex review timeout after 15min — see /tmp/codex-reviewer-current.log`.
    3. If `RC` is non-zero, treat it as a hard error (auth/CLI/runtime failure) and return `failed: codex review exited <RC> — see /tmp/codex-reviewer-current.log`. Do NOT proceed to stamp the marker.
    4. **Wrong-repo guard.** Confirm codex reviewed THIS repo: the log's `workdir:` line must be the target repo root, and findings must reference its files. If the log shows a different repo/path (a stale-session replay slipped past isolation), discard this round and retry step 3.1 once more (the wrapper already makes a fresh HOME each call). If a second attempt still replays, fall back to the isolated `exec` form for this round — `~/.claude/scripts/codex-isolated.sh exec -m gpt-5.5 --sandbox read-only "Review the diff of the current branch against $BASE; cd into the repo, read changed files, report prioritized findings with file:line + severity, or 'no material findings'." > "$LOG" 2>&1` — and if THAT also replays, return `blocked: codex-wrong-repo — see $LOG`.
    5. Inspect the log: `tail -n 200 "$LOG"`, plus `Read` selectively if needed. Do NOT print full output back to the parent.

@@ -1,0 +1,46 @@
+{
+  "id": "csharp",
+  "description": "C# / .NET baseline invariants — deliberately narrow, only patterns that are nearly always a vulnerability: insecure Json.NET TypeNameHandling (deserialization RCE), BinaryFormatter, SQL built by string concatenation into SqlCommand/CommandText, a TLS certificate-validation callback hardcoded to accept everything, and Process.Start with a concatenated command line. Each rule anchors on a concrete .NET API so generic C# code does not trip it.",
+  "rules": [
+    {
+      "//": "Json.NET (Newtonsoft) honors $type from the payload when TypeNameHandling is anything other than None, letting an attacker instantiate arbitrary types during deserialization — a well-known RCE gadget chain. Only None is safe. The optional `TypeNameHandling.` qualifier covers both `TypeNameHandling = TypeNameHandling.Auto` (object-initializer) and a bare `= Auto`. None is excluded by enumerating only the dangerous members.",
+      "id": "csharp-jsonnet-typenamehandling",
+      "severity": "hard",
+      "include": "**/*.cs",
+      "pattern": "TypeNameHandling\\s*=\\s*(?:TypeNameHandling\\.)?(?:All|Auto|Objects|Arrays)",
+      "message": "Json.NET TypeNameHandling set to All/Auto/Objects/Arrays embeds CLR type names in the payload and instantiates them on read — a deserialization RCE vector. Use TypeNameHandling.None and a strongly-typed model, or a vetted ISerializationBinder if polymorphism is unavoidable."
+    },
+    {
+      "//": "BinaryFormatter deserializes attacker-controlled byte streams into live objects via type metadata in the stream — Microsoft has formally deprecated it as insecure with no safe usage. Any `new BinaryFormatter(` is a finding. Replace with System.Text.Json / a contract-based serializer (DataContractSerializer with known types, protobuf, MessagePack).",
+      "id": "csharp-binaryformatter",
+      "severity": "hard",
+      "include": "**/*.cs",
+      "pattern": "new\\s+BinaryFormatter\\s*\\(",
+      "message": "BinaryFormatter is insecure-by-design (deserialization RCE) and deprecated by Microsoft — use System.Text.Json, or DataContractSerializer/protobuf/MessagePack with a known-types allowlist. There is no safe way to BinaryFormatter.Deserialize untrusted input."
+    },
+    {
+      "//": "SQL assembled by `+` concatenation and handed to ADO.NET is classic SQL injection. Two shapes are caught: `new SqlCommand(\"...\" + var)` (constructor) and `cmd.CommandText = \"...\" + var` (property). The literal must be immediately followed by `\\s*\\+`, so a parameterized query `new SqlCommand(\"... WHERE id = @id\", conn)` (closing quote followed by `,`) does NOT match. Use SqlParameter / @named bound parameters, never string building.",
+      "id": "csharp-sql-string-concat",
+      "severity": "hard",
+      "include": "**/*.cs",
+      "pattern": "new\\s+SqlCommand\\s*\\(\\s*\"[^\"]*\"\\s*\\+|CommandText\\s*=\\s*\"[^\"]*\"\\s*\\+",
+      "message": "SQL built by string concatenation passed to SqlCommand/CommandText — a SQL injection sink. Use parameterized queries: `new SqlCommand(\"... WHERE id = @id\", conn)` with `cmd.Parameters.AddWithValue(\"@id\", id)` (or a typed SqlParameter)."
+    },
+    {
+      "//": "Assigning a certificate-validation callback whose body is `=> true` accepts ANY server certificate, defeating TLS and enabling a trivial MITM. The optional `Custom` infix covers both ServicePointManager.ServerCertificateValidationCallback and HttpClientHandler.ServerCertificateCustomValidationCallback. `\\+?=` catches both `=` and `+=`; `[^;\\n]*` keeps the match on the lambda parameter list so the `=> true` body is the validator return, not an unrelated later statement. A real validator that inspects chain/errors will not end in a bare `=> true`.",
+      "id": "csharp-tls-cert-validation-bypass",
+      "severity": "hard",
+      "include": "**/*.cs",
+      "pattern": "ServerCertificate(?:Custom)?ValidationCallback\\s*\\+?=\\s*[^;\\n]*=>\\s*true",
+      "message": "TLS certificate-validation callback hardcoded to return true accepts any certificate — a man-in-the-middle bypass. Validate the chain and SslPolicyErrors (return errors == SslPolicyErrors.None), or pin the expected cert/CA. For a local self-signed dev server, scope the trust narrowly and never ship it."
+    },
+    {
+      "//": "Process.Start with a concatenated first argument splices a runtime value into the command/path string. When that value is user-influenced it is command/argument injection. WARN (not HARD) because Process.Start has overloads (filename, ProcessStartInfo) where concatenation of a trusted constant is benign, and the line-level regex cannot prove the source. Fix: pass arguments via ProcessStartInfo.ArgumentList (no shell, no quoting), never a concatenated command line.",
+      "id": "csharp-process-start-concat",
+      "severity": "warn",
+      "include": "**/*.cs",
+      "pattern": "Process\\.Start\\(\\s*\"[^\"]*\"\\s*\\+",
+      "message": "Process.Start with a concatenated command line interpolates a runtime value into the invocation — argument/command injection if user-influenced. Use ProcessStartInfo with ArgumentList (each arg added separately, no shell) instead of building one string."
+    }
+  ]
+}

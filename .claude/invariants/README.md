@@ -61,8 +61,18 @@ either side make a requirement a no-op. `enabled: false` disables the check.
 ## Catalog
 
 **Security / correctness** (deterministic half of `generation-doctrine.md`):
-`secrets`, `typescript`, `react`, `cloudflare-workers`, `rails`, `python`,
-`go`, `terraform`, `docker`.
+
+- _Languages_: `typescript` (+ `react`, `cloudflare-workers` extend it),
+  `python`, `go`, `rails`, `java`, `csharp`, `php`, `rust`, `shell`.
+- _Infra / IaC / CI_: `docker`, `docker-compose`, `kubernetes`, `terraform`,
+  `github-actions`, `ansible`.
+- _Server / API config_: `nginx`, `graphql`.
+- _Cross-cutting_: `secrets`.
+
+The `typescript` and `python` packs also carry a web-security layer
+(TLS-verification bypass, weak hash, insecure-randomness-for-secrets, CORS
+wildcard, debug-mode-in-prod, deserialization / SSTI sinks) on top of their
+language baselines.
 
 **UX** (deterministic half of `ux-doctrine.md`) — the mechanically-checkable
 subset of "good UI":
