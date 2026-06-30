@@ -27,7 +27,7 @@ You are the Codex review gate runner. Your sole job is to bring the current bran
 
 ## Procedure
 
-1. Determine the working repo. Use `pwd` and `git rev-parse --show-toplevel`. If a target dir was passed in the prompt, `cd` there first. Pick a stable log path you'll reuse across rounds: `LOG=/tmp/codex-reviewer-current.log`. Truncate it before each round.
+1. Determine the working repo. If a target dir was passed in the prompt, `cd` there first. Set `REPO="$(git rev-parse --show-toplevel)"` and **export `CODEX_ISO_CWD="$REPO"`** — the isolation wrapper cd's into this before invoking codex, which is what prevents the "wrong-repo" drift (`codex review` has no `--cd` and will otherwise resolve to another local checkout of the same remote if the cwd is ambiguous). Confirm `pwd` and `$REPO` are the intended repo before proceeding. Pick a stable log path you'll reuse across rounds: `LOG=/tmp/codex-reviewer-current.log`. Truncate it before each round.
 2. Detect the base branch — never hardcode `main`:
    ```
    BASE=$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name)
@@ -35,9 +35,9 @@ You are the Codex review gate runner. Your sole job is to bring the current bran
 3. Loop, up to 5 iterations:
    1. Truncate the log: `: > "$LOG"`. Start codex in the background with the Bash tool's `run_in_background: true`. **Always run codex through the HOME-isolation wrapper** — bare `codex review` can replay an unrelated repo's cached scan ("wrong-repo" bug); the wrapper gives codex a fresh empty HOME so it has no prior session to replay (see `~/.claude/scripts/codex-isolated.sh`). Use the latest model (`-m gpt-5.5`; if it errors as unknown, pick the highest `gpt-5.x` from `~/.codex/models_cache.json`):
       ```
-      ~/.claude/scripts/codex-isolated.sh review -m gpt-5.5 --base "$BASE" > "$LOG" 2>&1
+      CODEX_ISO_CWD="$REPO" ~/.claude/scripts/codex-isolated.sh review -m gpt-5.5 --base "$BASE" > "$LOG" 2>&1
       ```
-      Capture the returned shell id (call it `CODEX_SH`).
+      Capture the returned shell id (call it `CODEX_SH`). Pass `CODEX_ISO_CWD="$REPO"` on every codex invocation (it does not persist across separate Bash calls).
    2. Poll until codex exits, using an **adaptive interval** — most reviews finish inside the first ~2 minutes, so poll tightly early and back off after to avoid burning wall-clock on the tail. Sleep `10`s per poll while elapsed `< 120`s, then `30`s once past 120s. Track elapsed seconds yourself (sum of the sleeps). Combine the sleep with a status snapshot in the same Bash call so the user sees one line per poll, e.g.
         ```
         sleep "$INTERVAL" && printf 'round %s | %ss elapsed | log lines: %s\n' "$ROUND" "$ELAPSED" "$(wc -l < "$LOG")" && tail -n 2 "$LOG" | sed 's/^/  · /'
@@ -46,7 +46,7 @@ You are the Codex review gate runner. Your sole job is to bring the current bran
       - Call `BashOutput(bash_id=$CODEX_SH)` to check status. When `BashOutput` reports the shell has exited, capture the exit code (`RC`).
       - If accumulated elapsed time exceeds 15 minutes (900s), call `KillBash(shell_id=$CODEX_SH)` and return `failed: codex review timeout after 15min — see /tmp/codex-reviewer-current.log`.
    3. If `RC` is non-zero, treat it as a hard error (auth/CLI/runtime failure) and return `failed: codex review exited <RC> — see /tmp/codex-reviewer-current.log`. Do NOT proceed to stamp the marker.
-   4. **Wrong-repo guard.** Confirm codex reviewed THIS repo: the log's `workdir:` line must be the target repo root, and findings must reference its files. If the log shows a different repo/path (a stale-session replay slipped past isolation), discard this round and retry step 3.1 once more (the wrapper already makes a fresh HOME each call). If a second attempt still replays, fall back to the isolated `exec` form for this round — `~/.claude/scripts/codex-isolated.sh exec -m gpt-5.5 --sandbox read-only "Review the diff of the current branch against $BASE; cd into the repo, read changed files, report prioritized findings with file:line + severity, or 'no material findings'." > "$LOG" 2>&1` — and if THAT also replays, return `blocked: codex-wrong-repo — see $LOG`.
+   4. **Wrong-repo guard.** Confirm codex reviewed THIS repo: the log's `workdir:` line must equal `$REPO` exactly. Any other path — especially a checkout under a different user's home (e.g. `/Users/<someone-else>/...`) or a stale HEAD — means codex drifted to another clone of the same remote; discard this round. With `CODEX_ISO_CWD="$REPO"` set (step 1) the wrapper cd's into the right repo, so this should not happen; if it still does, re-run step 3.1 once more with `CODEX_ISO_CWD="$REPO"` explicitly set. If a second attempt still drifts, fall back to the isolated `exec` form, which also pins the dir with `-C`: `CODEX_ISO_CWD="$REPO" ~/.claude/scripts/codex-isolated.sh exec -C "$REPO" -m gpt-5.5 --sandbox read-only "Review the diff of the current branch against $BASE; read changed files, report prioritized findings with file:line + severity, or 'no material findings'." > "$LOG" 2>&1` — and if THAT also drifts, return `blocked: codex-wrong-repo — see $LOG`.
    5. Inspect the log: `tail -n 200 "$LOG"`, plus `Read` selectively if needed. Do NOT print full output back to the parent.
    6. If codex returned clean (no findings), break out of the loop and go to step 4.
    7. For each finding: edit the relevant file, then `git add <file>`. After all findings are addressed, `git commit -m "<short message describing the fix bucket>"` (no AI attribution).
