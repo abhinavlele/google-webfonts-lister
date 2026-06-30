@@ -91,6 +91,7 @@
       "Bash(gh search*)",
       "Bash(codex review*)",
       "Bash(~/.claude/scripts/codex-review-mark-clean.sh*)",
+      "Bash(~/.claude/scripts/security-review-mark-clean.sh*)",
       "WebFetch(domain:thehackernews.com)",
       "WebFetch(domain:www.thehackernews.com)",
       "WebFetch(domain:bleepingcomputer.com)",
@@ -143,6 +144,10 @@
           {
             "type": "command",
             "command": "~/.claude/hooks/wrappers/codex_review_gate.sh"
+          },
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/wrappers/security_review_gate.sh"
           },
           {
             "type": "command",

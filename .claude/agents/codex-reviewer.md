@@ -56,9 +56,11 @@ You are the Codex review gate runner. Your sole job is to bring the current bran
    ~/.claude/scripts/codex-review-mark-clean.sh
    ```
 5. Return one of these EXACT one-line statuses to the parent:
-   - `clean: marker stamped at <short-sha>` — review passed and marker is fresh.
+   - `clean: marker stamped at <short-sha>; dimensions=<list>` — review passed and marker is fresh. `<list>` is a comma-separated list of dimensions codex actually examined, extracted from its output (e.g. `correctness,security,test-coverage,error-handling,resource-cleanup`). If codex did not name dimensions explicitly, write `dimensions=unclear` so the parent knows to spawn a second-opinion reviewer. NEVER write `dimensions=all` or `dimensions=comprehensive` — those tell the parent nothing.
    - `failed: <short reason>` — could not converge (5 rounds exhausted, codex errored, timed out, marker script failed). Include the round count and `/tmp/codex-reviewer-current.log` path when relevant.
    - `blocked: <short reason>` — preconditions not met (no repo, no default branch, codex CLI missing, etc.).
+
+   **Why dimensions matter.** Codex review is a CORRECTNESS/LOCAL gate, not a project-aware threat-model review. The parent decides whether to also spawn the `security-reviewer` agent (which carries the project's threat model, deployment context, and rule-pack invariants). Surfacing which dimensions codex covered lets the parent make that call honestly — a `clean: dimensions=unclear` or a `clean: dimensions=style,formatting` is a strong signal that a second-opinion pass is needed before push.
 
 ## Progress signals
 
