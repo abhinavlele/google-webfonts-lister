@@ -26,6 +26,10 @@ A `PreToolUse` hook (`~/.claude/hooks/codex_review_gate.py`) **blocks** `gh pr c
 
 When blocked: spawn the `codex-reviewer` sub-agent (review → fix → commit → repeat ≤5 rounds → stamp `.git/codex-review-ok`). On `clean`, retry. On `failed`/`blocked`, surface to user. Bypass with `SKIP_CODEX_REVIEW=1 <cmd>` sparingly. Codex runs via `~/.claude/scripts/codex-isolated.sh` (fresh empty `HOME`) so `~/.codex` session store can't replay another repo's cached scan.
 
+## CI Gate (Enforced)
+
+A `PreToolUse` hook (`~/.claude/hooks/ci_gate.py`) **blocks** `gh pr merge` while the target PR's CI is failing/pending/cancelled — never merge on red or unfinished CI. Allows when all checks pass/skipping, none exist, or `--auto` is used (it then blocks only on already-failed checks). Fail-OPEN on an indeterminate state so it can't deadlock. When blocked, wait for green (`gh pr checks --watch`) or fix failures, then retry. Bypass sparingly: `SKIP_CI_GATE=1 <cmd>`.
+
 ## Generation Doctrine (Enforced)
 
 Full adversarial self-review checklist: `rules/generation-doctrine.md` (always loaded). Before committing, check symmetry (every enforcement path), hostile inputs, mirror ops (import↔export, create↔delete), crash/replay, literal-vs-intent, and a violating test per security/data invariant. `/selfreview` walks it against the diff.

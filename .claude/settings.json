@@ -138,6 +138,10 @@
           {
             "type": "command",
             "command": "~/.claude/hooks/wrappers/running_blind_guard.sh"
+          },
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/wrappers/ci_gate.sh"
           }
         ]
       }
