@@ -25,6 +25,21 @@ cp "$REAL_HOME/.codex/config.toml" "$ISO/.codex/" 2>/dev/null || true
 cleanup() { rm -rf "$ISO"; }
 trap cleanup EXIT INT TERM
 
+# Pin the working directory. WHY: `codex review` has no --cd flag and, when run
+# from an ambiguous cwd, can resolve the repo to a DIFFERENT local checkout of
+# the same git remote (observed: a second clone under another user's home, at a
+# stale HEAD — the "wrong-repo" replay). A fresh HOME does not fix this because
+# the drift is by working directory, not by session state. Set CODEX_ISO_CWD to
+# the intended repo root and the wrapper cd's there before invoking codex, so
+# `review`/`exec` operate on exactly that checkout. Defaults to the current
+# directory (no behavior change for callers that don't set it).
+WORKDIR="${CODEX_ISO_CWD:-$PWD}"
+if [ ! -d "$WORKDIR" ]; then
+  echo "codex-isolated: CODEX_ISO_CWD is not a directory: $WORKDIR" >&2
+  exit 3
+fi
+cd "$WORKDIR" || { echo "codex-isolated: cannot cd to $WORKDIR" >&2; exit 3; }
+
 # `env -i` drops the inherited environment so no stray CODEX_*/HOME leaks in;
 # we re-add only PATH/TERM/LANG (+ HOME → the isolated dir) plus a minimal
 # allowlist of auth/network vars so env-var-authenticated setups (API key,
