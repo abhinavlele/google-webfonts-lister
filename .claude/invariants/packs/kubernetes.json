@@ -1,0 +1,87 @@
+{
+  "id": "kubernetes",
+  "description": "Kubernetes manifest security invariants. Pod/container specs that grant host-level privilege, disable the no-escalation guard, run as root, mount the host docker socket, add dangerous Linux capabilities, or pull a mutable :latest image are the recurring container-escape and supply-chain footguns. Patterns are KEY-ANCHORED (each fires only on the specific dangerous setting) to keep false positives near-zero, because the include globs (**/*.yaml, **/*.yml) are intentionally broad. Rules: k8s-privileged-container, k8s-host-namespace, k8s-allow-privilege-escalation, k8s-run-as-non-root-false, k8s-run-as-root-uid, k8s-image-latest-tag, k8s-dangerous-capability, k8s-hostpath-docker-socket, k8s-automount-service-account-token.",
+  "rules": [
+    {
+      "//": "A container with `privileged: true` in its securityContext gets nearly all host capabilities, write access to host devices, and can trivially escape to the node — the single most dangerous container setting. Key-anchored to the `privileged:` field so prose mentioning the word never fires; an optional quote covers `privileged: \"true\"`. HARD: there is essentially no legitimate production use that cannot be replaced with a precise capability grant.",
+      "id": "k8s-privileged-container",
+      "severity": "hard",
+      "include": ["**/*.yaml", "**/*.yml"],
+      "pattern": "^\\s*privileged:\\s*[\"']?true\\b",
+      "flags": "m",
+      "message": "Kubernetes securityContext sets privileged: true — the container gets host devices and capabilities and can escape to the node. Drop privileged and grant only the specific capabilities the workload needs (securityContext.capabilities.add)."
+    },
+    {
+      "//": "hostNetwork / hostPID / hostIPC: true place the pod in the node's network, process, or IPC namespace — it can sniff node traffic, see and signal host processes, and read host shared memory, erasing pod isolation. Key-anchored to the three exact camelCase keys (case-sensitive, no `i` flag, since the k8s schema casing is fixed) so unrelated keys never match. HARD: real uses (CNI agents, monitoring daemons) are rare, run from trusted system namespaces, and should be reviewed explicitly.",
+      "id": "k8s-host-namespace",
+      "severity": "hard",
+      "include": ["**/*.yaml", "**/*.yml"],
+      "pattern": "^\\s*host(?:Network|PID|IPC):\\s*[\"']?true\\b",
+      "flags": "m",
+      "message": "Kubernetes pod spec enables a host namespace (hostNetwork/hostPID/hostIPC: true) — this breaks pod isolation and exposes node traffic, processes, or shared memory. Remove it unless this is a vetted system component, and scope it to a trusted namespace."
+    },
+    {
+      "//": "allowPrivilegeEscalation: true lets a process gain more privileges than its parent (e.g. via setuid binaries), defeating a no-new-privileges hardening baseline. The secure value is false; the field defaulting unset is also weaker, but only an EXPLICIT `true` is flagged to keep false positives at zero. HARD: explicitly opting back into escalation is almost always a mistake.",
+      "id": "k8s-allow-privilege-escalation",
+      "severity": "hard",
+      "include": ["**/*.yaml", "**/*.yml"],
+      "pattern": "^\\s*allowPrivilegeEscalation:\\s*[\"']?true\\b",
+      "flags": "m",
+      "message": "Kubernetes securityContext sets allowPrivilegeEscalation: true — a process can gain more privileges than its parent (setuid escalation). Set allowPrivilegeEscalation: false and add `no-new-privileges` to the runtime baseline."
+    },
+    {
+      "//": "runAsNonRoot: false explicitly permits the container to run as uid 0, removing the kubelet guard that would otherwise refuse a root image. WARN (not HARD): some legacy images genuinely require root and the team may accept the risk with a compensating control — flag for review rather than block. Companion to k8s-run-as-root-uid.",
+      "id": "k8s-run-as-non-root-false",
+      "severity": "warn",
+      "include": ["**/*.yaml", "**/*.yml"],
+      "pattern": "^\\s*runAsNonRoot:\\s*[\"']?false\\b",
+      "flags": "m",
+      "message": "Kubernetes securityContext sets runAsNonRoot: false — the container is allowed to run as root. Prefer runAsNonRoot: true with a non-zero runAsUser; if a legacy image needs root, document the compensating controls."
+    },
+    {
+      "//": "runAsUser: 0 pins the container to the root uid. The `0\\b` boundary means `runAsUser: 1000` (or any non-zero uid) does not match — only the literal root uid 0 fires. WARN because the field is sometimes set to 0 in base manifests later overridden by an overlay/non-root parent context; flag for review. Key-anchored so only runAsUser (not fsGroup or other numeric fields) is considered.",
+      "id": "k8s-run-as-root-uid",
+      "severity": "warn",
+      "include": ["**/*.yaml", "**/*.yml"],
+      "pattern": "^\\s*runAsUser:\\s*[\"']?0\\b",
+      "flags": "m",
+      "message": "Kubernetes securityContext sets runAsUser: 0 (root) — run as a dedicated non-zero uid instead and set runAsNonRoot: true. If an overlay overrides this to a non-root user, confirm the effective uid is non-zero."
+    },
+    {
+      "//": "An image reference pinned to the `:latest` tag (or an explicit :latest) is mutable — the same manifest can pull a different binary on the next rollout, with no audit trail and no rollback by tag. The negative lookahead `(?![\\w.-])` ensures specific tags like `:latest-debian` or `:latest.1` do NOT match — only a bare `:latest` tag terminator (quote, whitespace, or end of line). Untagged images are deliberately NOT flagged here (registry-port forms like `registry:5000/app` make untagged detection false-positive-prone). WARN: pin by digest (image@sha256:...) or an immutable version tag.",
+      "id": "k8s-image-latest-tag",
+      "severity": "warn",
+      "include": ["**/*.yaml", "**/*.yml"],
+      "pattern": "^\\s*image:\\s*[\"']?[^\\s\"']+:latest(?![\\w.-])",
+      "flags": "m",
+      "message": "Kubernetes container image is pinned to :latest — a mutable tag can ship a different binary on the next rollout with no audit trail. Pin by digest (image@sha256:<hex>) or an immutable version tag."
+    },
+    {
+      "//": "Adding a dangerous Linux capability (SYS_ADMIN ~ near-root, NET_ADMIN ~ network stack control, ALL ~ everything) re-grants the privilege a hardened baseline drops. CRITICAL false-positive avoidance: the pattern is anchored to the `add:` key, NEVER a bare `- CAP` list item — so the RECOMMENDED hardening `drop:\\n  - ALL` (and `drop: [ALL]`) is NOT flagged. The match starts on the `add:` line and looks forward within the engine's window: it matches the inline array form (`add: [SYS_ADMIN]`) OR a following YAML list where the dangerous cap appears among the items (`add:\\n  - SYS_ADMIN`), walking only consecutive `- ITEM` lines so an `add: []` followed by an unrelated `drop:` block cannot match. Case-sensitive (caps are uppercase). HARD.",
+      "id": "k8s-dangerous-capability",
+      "severity": "hard",
+      "include": ["**/*.yaml", "**/*.yml"],
+      "pattern": "^\\s*add:[^\\S\\n]*(?:\\[[^\\]]*\\b(?:SYS_ADMIN|NET_ADMIN|ALL)\\b|(?:\\n[^\\S\\n]*-[^\\S\\n]*[\"']?[A-Za-z_]+[\"']?)*\\n[^\\S\\n]*-[^\\S\\n]*[\"']?(?:SYS_ADMIN|NET_ADMIN|ALL)\\b)",
+      "flags": "m",
+      "message": "Kubernetes securityContext capabilities.add grants a dangerous capability (SYS_ADMIN/NET_ADMIN/ALL) — these approach full root. Drop ALL (capabilities.drop: [ALL]) and add back only the minimal, specific capability the workload needs (e.g. NET_BIND_SERVICE)."
+    },
+    {
+      "//": "A hostPath volume mounting the node's docker/container runtime socket (/var/run/docker.sock or /run/docker.sock) hands the container full control of the runtime — it can start a privileged sibling container and own the node. Key-anchored to a `path:` field whose value is exactly the docker socket, so ordinary hostPath mounts (logs, config) do not match. HARD: there is no safe reason for an application pod to mount the runtime socket.",
+      "id": "k8s-hostpath-docker-socket",
+      "severity": "hard",
+      "include": ["**/*.yaml", "**/*.yml"],
+      "pattern": "^\\s*path:\\s*[\"']?/(?:var/)?run/docker\\.sock\\b",
+      "flags": "m",
+      "message": "Kubernetes hostPath volume mounts the node's docker socket (/var/run/docker.sock) — a process in the pod can drive the runtime and take over the node. Remove the mount; use the Kubernetes API or a vetted operator instead of the raw runtime socket."
+    },
+    {
+      "//": "automountServiceAccountToken: true (often the default) injects the pod's ServiceAccount token into every container, so a compromised process can call the API server with that identity. Workloads that do not talk to the API server should set this to false. WARN because controllers and in-cluster clients legitimately need the token — flag for confirmation, not a block.",
+      "id": "k8s-automount-service-account-token",
+      "severity": "warn",
+      "include": ["**/*.yaml", "**/*.yml"],
+      "pattern": "^\\s*automountServiceAccountToken:\\s*[\"']?true\\b",
+      "flags": "m",
+      "message": "Kubernetes spec sets automountServiceAccountToken: true — the ServiceAccount token is injected into the pod and usable by any compromised process. If the workload does not call the API server, set it to false; otherwise scope the ServiceAccount's RBAC to the minimum."
+    }
+  ]
+}

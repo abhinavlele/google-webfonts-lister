@@ -1,0 +1,22 @@
+{
+  "id": "graphql",
+  "description": "GraphQL server-config invariants. Introspection and the in-browser IDE (Playground / GraphiQL) are convenient in development but, left enabled in production, hand an attacker the full schema and an interactive query console. These settings live in JS/TS server config, so the rules are tight (an explicit `: true`) and WARN-level — whether they are a problem depends on the deploy target, which a regex cannot see.",
+  "rules": [
+    {
+      "//": "introspection: true returns the complete schema (types, fields, args, deprecations) to any caller — useful in dev, a reconnaissance gift in production. The `\\b` before `introspection` avoids matching a longer key such as `schema_introspection`; case-sensitive because Apollo/graphql-js use the lowercase `introspection` option key. WARN: introspection is correct in non-production environments, so confirm this is gated by env before shipping.",
+      "id": "graphql-introspection-enabled",
+      "severity": "warn",
+      "include": ["**/*.ts", "**/*.js", "**/*.tsx", "**/*.jsx", "**/*.mjs"],
+      "pattern": "\\bintrospection\\s*:\\s*true\\b",
+      "message": "GraphQL introspection explicitly enabled — this exposes the full schema to any caller. Gate it behind an environment check (`introspection: process.env.NODE_ENV !== 'production'`) so it is off in production."
+    },
+    {
+      "//": "playground: true / graphiql: true serve an interactive in-browser query IDE from the GraphQL endpoint. In production that is an unauthenticated query console against your API. The `\\b` before the alternation prevents matching a longer key; case-sensitive because the option keys (`playground`, `graphiql`) are lowercase in apollo-server and express-graphql. WARN: legitimate in dev, so confirm it is environment-gated.",
+      "id": "graphql-ide-enabled",
+      "severity": "warn",
+      "include": ["**/*.ts", "**/*.js", "**/*.tsx", "**/*.jsx", "**/*.mjs"],
+      "pattern": "\\b(?:playground|graphiql)\\s*:\\s*true\\b",
+      "message": "GraphQL in-browser IDE (Playground/GraphiQL) explicitly enabled — in production this is an unauthenticated query console against your API. Gate it behind an environment check so it is disabled in production."
+    }
+  ]
+}

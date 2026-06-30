@@ -1,0 +1,51 @@
+{
+  "id": "docker-compose",
+  "description": "Docker Compose service security invariants. Compose files routinely smuggle in the same host-level escapes as raw `docker run` flags: privileged services, the host network namespace, the docker socket bind-mounted into a container, dangerous added capabilities, and ports published on all interfaces. Patterns are KEY-ANCHORED so they fire only on the dangerous setting, keeping false positives near-zero across the compose-named include globs. Rules: compose-privileged, compose-network-mode-host, compose-docker-socket-mount, compose-dangerous-capability, compose-publish-all-interfaces.",
+  "rules": [
+    {
+      "//": "`privileged: true` on a compose service is the direct equivalent of `docker run --privileged`: the container receives host devices and nearly all capabilities and can escape to the host. Key-anchored to the `privileged:` field; the optional quote covers `privileged: \"true\"`. HARD — no routine compose workload needs full privilege; grant specific cap_add entries instead.",
+      "id": "compose-privileged",
+      "severity": "hard",
+      "include": ["**/docker-compose*.yml", "**/docker-compose*.yaml", "**/compose.yml", "**/compose.yaml", "**/*.compose.yml", "**/*.compose.yaml"],
+      "pattern": "^\\s*privileged:\\s*[\"']?true\\b",
+      "flags": "m",
+      "message": "Compose service sets privileged: true — equivalent to `docker run --privileged`, giving host devices and capabilities and enabling host escape. Remove it and add only the specific capabilities the service needs under cap_add."
+    },
+    {
+      "//": "`network_mode: host` puts the service directly on the host network stack — it bypasses Compose network isolation and port mapping, can bind host ports, and can sniff host traffic. Anchored to the key with the value exactly `host` (end-of-line via the `m` flag), so `network_mode: bridge` / `service:foo` / `container:bar` do not match. WARN: a few local-dev and host-networking use cases are legitimate, so flag for review rather than block.",
+      "id": "compose-network-mode-host",
+      "severity": "warn",
+      "include": ["**/docker-compose*.yml", "**/docker-compose*.yaml", "**/compose.yml", "**/compose.yaml", "**/*.compose.yml", "**/*.compose.yaml"],
+      "pattern": "^\\s*network_mode:\\s*[\"']?host[\"']?\\s*$",
+      "flags": "m",
+      "message": "Compose service uses network_mode: host — it shares the host network stack, bypassing Compose isolation and port mapping and exposing host traffic. Use a user-defined network with explicit `ports` instead unless host networking is genuinely required."
+    },
+    {
+      "//": "Bind-mounting the docker socket (/var/run/docker.sock or /run/docker.sock) into a service gives that container full control of the host daemon — it can launch a privileged sibling and own the host. Matches both the short syntax list item (`- /var/run/docker.sock:/var/run/docker.sock`) and the long syntax `source:` key. Anchored so ordinary bind mounts (./app:/app, named volumes) never match. HARD: socket-in-container is a well-known privilege-escalation pattern.",
+      "id": "compose-docker-socket-mount",
+      "severity": "hard",
+      "include": ["**/docker-compose*.yml", "**/docker-compose*.yaml", "**/compose.yml", "**/compose.yaml", "**/*.compose.yml", "**/*.compose.yaml"],
+      "pattern": "^\\s*(?:-\\s*[\"']?|source:\\s*[\"']?)/(?:var/)?run/docker\\.sock\\b",
+      "flags": "m",
+      "message": "Compose service bind-mounts the docker socket (/var/run/docker.sock) — the container can drive the host daemon and start privileged siblings. Remove the mount; if a tool needs the API, front it with a scoped socket proxy (e.g. tecnativa/docker-socket-proxy) exposing only the required endpoints."
+    },
+    {
+      "//": "cap_add of SYS_ADMIN (near-root), NET_ADMIN (network control), or ALL (everything) re-grants privileges a hardened container drops. The pattern is anchored to the `cap_add:` key, NEVER a bare `- CAP` list item, so the safe `cap_drop:\\n  - ALL` form is NOT flagged. It matches the inline array (`cap_add: [SYS_ADMIN]`) or a following YAML list containing the dangerous cap (`cap_add:\\n  - SYS_ADMIN`), walking only consecutive `- ITEM` lines so a `cap_add: []` next to an unrelated block cannot match. Case-sensitive (caps are uppercase). HARD.",
+      "id": "compose-dangerous-capability",
+      "severity": "hard",
+      "include": ["**/docker-compose*.yml", "**/docker-compose*.yaml", "**/compose.yml", "**/compose.yaml", "**/*.compose.yml", "**/*.compose.yaml"],
+      "pattern": "^\\s*cap_add:[^\\S\\n]*(?:\\[[^\\]]*\\b(?:SYS_ADMIN|NET_ADMIN|ALL)\\b|(?:\\n[^\\S\\n]*-[^\\S\\n]*[\"']?[A-Za-z_]+[\"']?)*\\n[^\\S\\n]*-[^\\S\\n]*[\"']?(?:SYS_ADMIN|NET_ADMIN|ALL)\\b)",
+      "flags": "m",
+      "message": "Compose service cap_add grants a dangerous capability (SYS_ADMIN/NET_ADMIN/ALL) — these approach full root. Use cap_drop: [ALL] and add back only the minimal capability the service needs (e.g. NET_BIND_SERVICE)."
+    },
+    {
+      "//": "A port published on 0.0.0.0 (the default when no host IP is given, but explicit here) exposes the service on every host interface, not just loopback — frequently an unintended exposure of a database or admin port to the LAN/internet. Anchored to a `ports` list item beginning with the `0.0.0.0:` host-IP prefix, so `127.0.0.1:...` mappings and bare `8080:8080` (which the author may intend) are treated differently — only the explicit all-interfaces bind warns. WARN: public exposure is sometimes intended; confirm it.",
+      "id": "compose-publish-all-interfaces",
+      "severity": "warn",
+      "include": ["**/docker-compose*.yml", "**/docker-compose*.yaml", "**/compose.yml", "**/compose.yaml", "**/*.compose.yml", "**/*.compose.yaml"],
+      "pattern": "^\\s*-\\s*[\"']?0\\.0\\.0\\.0:",
+      "flags": "m",
+      "message": "Compose service publishes a port on 0.0.0.0 (all interfaces) — the service is reachable from every host network, not just localhost. Bind to 127.0.0.1 (e.g. `127.0.0.1:5432:5432`) unless the service is meant to be publicly reachable."
+    }
+  ]
+}

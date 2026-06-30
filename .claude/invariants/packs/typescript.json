@@ -1,6 +1,6 @@
 {
   "id": "typescript",
-  "description": "TypeScript/JavaScript baseline: no dynamic code evaluation, no shell-interpolated child_process. Deliberately omits style noise (`: any` etc.) — this pack only encodes invariants. The eval/Function lookbehinds exclude method calls (regex.exec, vm.eval wrappers) so legit code is not blocked.",
+  "description": "TypeScript/JavaScript baseline: no dynamic code evaluation, no shell-interpolated child_process. Deliberately omits style noise (`: any` etc.) — this pack only encodes invariants. The eval/Function lookbehinds exclude method calls (regex.exec, vm.eval wrappers) so legit code is not blocked. Extended with: ts-tls-reject-unauthorized-false, ts-node-tls-reject-unauthorized-env, ts-weak-hash-md5-sha1, ts-insecure-random-secret, ts-node-serialize-deserialize, ts-cors-allow-origin-wildcard.",
   "rules": [
     {
       "id": "no-eval",
@@ -22,6 +22,56 @@
       "include": ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts", "**/*.js", "**/*.jsx", "**/*.mjs", "**/*.cjs"],
       "pattern": "(?:\\bchild_process\\.|\\bcp\\.|require\\(\\s*[\"'](?:node:)?child_process[\"']\\s*\\)\\s*\\.|(?<![\\w.$]))exec(?:Sync)?\\s*\\(\\s*`[^`]*\\$\\{",
       "message": "child_process exec with ${...} interpolated into the shell command — use execFile/spawn with an argument array (regex .exec() is not matched; aliased imports like `exec as run` are beyond this rule — keep the canonical name)"
+    },
+    {
+      "//": "`rejectUnauthorized: false` in a TLS/https/tls.connect options object turns off certificate-chain and hostname verification, so any MITM-presented cert is accepted — the JS equivalent of Go's InsecureSkipVerify. HARD because the property name is specific to the Node TLS options bag and almost never appears for any non-TLS purpose; `\\s*:\\s*false` requires the literal `false` so `rejectUnauthorized: true` and `rejectUnauthorized: shouldVerify` do not match. The `\\s*` spans newlines, catching the common multi-line options literal. Test setups using a self-signed server can suppress per-line with `// noqa: ts-tls-reject-unauthorized-false`.",
+      "id": "ts-tls-reject-unauthorized-false",
+      "severity": "hard",
+      "include": ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts", "**/*.js", "**/*.jsx", "**/*.mjs", "**/*.cjs"],
+      "pattern": "rejectUnauthorized\\s*:\\s*false",
+      "message": "rejectUnauthorized: false disables TLS certificate and hostname verification (accepts any MITM cert) — issue a properly-signed cert or pin a CA instead. For a local self-signed test server, suppress per-line with `// noqa: ts-tls-reject-unauthorized-false`."
+    },
+    {
+      "//": "NODE_TLS_REJECT_UNAUTHORIZED=0 is a process-global kill switch that disables TLS verification for EVERY outbound connection in the Node process, not just one client — far worse than a single rejectUnauthorized:false. Catches the env-file form (`NODE_TLS_REJECT_UNAUTHORIZED=0`), the JS assignment (`process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'`), and the JSON/object form (`\"NODE_TLS_REJECT_UNAUTHORIZED\": \"0\"`). The optional quote `[\"'`]?` then a literal `0` pin the disabling value; `NODE_TLS_REJECT_UNAUTHORIZED=1` does not match. Include list covers JS/TS source files AND `.env`/`.env.*`/`*.env` files where the bare env-var form is most commonly set.",
+      "id": "ts-node-tls-reject-unauthorized-env",
+      "severity": "hard",
+      "include": ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts", "**/*.js", "**/*.jsx", "**/*.mjs", "**/*.cjs", "**/.env", "**/.env.*", "**/*.env"],
+      "pattern": "NODE_TLS_REJECT_UNAUTHORIZED[\"'`]?\\s*[:=]\\s*[\"'`]?0",
+      "message": "NODE_TLS_REJECT_UNAUTHORIZED=0 disables TLS certificate verification process-wide for every outbound connection — never set it. Fix the trust store / CA bundle, or scope verification per-request, never globally."
+    },
+    {
+      "//": "createHash('md5'|'sha1') selects a hash that is broken for security use: MD5 and SHA-1 both have practical collision attacks, so they must not back signatures, password hashing, integrity tokens, or dedup keys that an attacker can grind. The `i` flag matches 'MD5'/'SHA1' capitalizations; the closing quote class `[\"'`]` after the algorithm name keeps `createHash('sha256')` and `createHash('sha512')` from matching (no 'sha1'/'md5' token is immediately followed by a quote there). WARN: a non-security checksum (etag, cache key) is a legitimate use — confirm and suppress per-line.",
+      "id": "ts-weak-hash-md5-sha1",
+      "severity": "warn",
+      "include": ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts", "**/*.js", "**/*.jsx", "**/*.mjs", "**/*.cjs"],
+      "pattern": "createHash\\(\\s*[\"'`](?:md5|sha1)[\"'`]",
+      "flags": "i",
+      "message": "createHash('md5'|'sha1') — MD5/SHA-1 are collision-broken and unfit for signatures, password hashing, or security tokens; use sha256/sha512 (or a KDF like scrypt/argon2 for passwords). If this is a non-security checksum (etag, cache key), confirm and suppress per-line with `// noqa: ts-weak-hash-md5-sha1`."
+    },
+    {
+      "//": "Math.random() is a non-cryptographic PRNG (xorshift-class, predictable from a few outputs) — never a source for secrets. This flags ONLY a security-named target (token/secret/password/otp/nonce/salt/apikey/api_key/sessionid/session_id, with `\\w*` allowing suffixes like tokenValue) assigned an expression that contains Math.random() on the same logical line (`[^;\\n]*` stops at a statement boundary so an unrelated later Math.random() is not pulled in). Bare `Math.random()` is deliberately NOT flagged — it is overwhelmingly used for jitter, sampling, and UI, and flagging it would be pure noise. `i` flag matches camelCase names (apiKey, sessionId). WARN: a security-named var that is genuinely non-sensitive can be suppressed per-line.",
+      "id": "ts-insecure-random-secret",
+      "severity": "warn",
+      "include": ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts", "**/*.js", "**/*.jsx", "**/*.mjs", "**/*.cjs"],
+      "pattern": "(?:token|secret|password|otp|nonce|salt|apikey|api_key|sessionid|session_id)\\w*\\s*[:=]\\s*[^;\\n]*Math\\.random\\(",
+      "flags": "i",
+      "message": "security-named value (token/secret/password/otp/nonce/salt/api_key/session_id) derived from Math.random() — Math.random is predictable and unfit for secrets. Use crypto.randomBytes / crypto.randomUUID / crypto.getRandomValues. If this name is not actually a secret, suppress per-line with `// noqa: ts-insecure-random-secret`."
+    },
+    {
+      "//": "The node-serialize package's unserialize() runs an `_$$ND_FUNC$$_` IIFE embedded in the JSON, so deserializing attacker-controlled data is a direct RCE (CVE-2017-5941). HARD on two tells: the package name `node-serialize` (its import/require), and any `.unserialize(` call — JavaScript has no native unserialize (that is PHP), so the call name almost exclusively belongs to this library. `JSON.parse` and `.serialize(` (the safe direction) are not matched. Never deserialize untrusted input through it — use JSON.parse on a validated schema.",
+      "id": "ts-node-serialize-deserialize",
+      "severity": "hard",
+      "include": ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts", "**/*.js", "**/*.jsx", "**/*.mjs", "**/*.cjs"],
+      "pattern": "node-serialize|\\.unserialize\\(",
+      "message": "node-serialize / .unserialize() runs embedded functions during deserialization — an RCE sink on attacker-controlled data (CVE-2017-5941). Parse with JSON.parse against a validated schema; never unserialize untrusted input."
+    },
+    {
+      "//": "`Access-Control-Allow-Origin: *` lets any website read the response cross-origin. For a genuinely public, unauthenticated, non-credentialed endpoint that is fine — but it is a finding because it is frequently shipped on internal or authenticated APIs by mistake, exposing data to any origin. Catches both the object-literal header form (`'Access-Control-Allow-Origin': '*'`) and the setHeader call form (`setHeader('Access-Control-Allow-Origin', '*')`) via the `[:,]` between the header name and the quoted `*`. A reflected/variable origin (`'Access-Control-Allow-Origin': origin`) is NOT matched — only the literal quoted wildcard. WARN: confirm the endpoint is meant to be world-readable; never combine `*` with Access-Control-Allow-Credentials: true.",
+      "id": "ts-cors-allow-origin-wildcard",
+      "severity": "warn",
+      "include": ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts", "**/*.js", "**/*.jsx", "**/*.mjs", "**/*.cjs"],
+      "pattern": "Access-Control-Allow-Origin[\"'`]?\\s*[:,]\\s*[\"'`]\\*[\"'`]",
+      "message": "Access-Control-Allow-Origin: * makes the response readable by any origin — safe only for genuinely public, non-credentialed endpoints. For authenticated/internal APIs, echo a validated allowlisted origin instead, and never pair `*` with Access-Control-Allow-Credentials: true. Suppress per-line with `// noqa: ts-cors-allow-origin-wildcard` if this endpoint is intentionally public."
     }
   ]
 }

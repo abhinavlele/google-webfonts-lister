@@ -957,7 +957,53 @@ function lintCustomRules(file, lines, customRules, findings) {
         // accidentally bypassing HARD pack findings.
         const isGoFile = /\.go$/.test(file);
         const nolint = isGoFile && /\/\/\s*nolint\b/i.test(text);
-        if (noqaAll || noqaId || noqaPrevAll || noqaPrevId || nolint) continue;
+        // JS/TS-style suppression: `// noqa: <rule-id>` or `// noqa` on the
+        // matched line for files that use `//` comment syntax (.js, .jsx,
+        // .ts, .tsx, .mjs, .cjs, .mts, .cts). Mirrors the `# noqa` behaviour
+        // for hash-comment files. The preceding-line form is also supported:
+        // a standalone `// noqa: <id>` comment on the line immediately above
+        // silences the finding for the same reasons as `# noqa` does there.
+        const isJsLikeFile = /\.(js|jsx|ts|tsx|mjs|cjs|mts|cts)$/.test(file);
+        const jsNoqaAll =
+          isJsLikeFile && /(?:^|\s)\/\/\s*noqa\s*$/i.test(text);
+        const jsNoqaId =
+          isJsLikeFile &&
+          new RegExp(
+            `(?:^|\\s)\\/\\/\\s*noqa:\\s*${escapedId}(?:\\s|$)`,
+            "i",
+          ).test(text);
+        // Preceding-line JS/TS suppression: a STANDALONE `// noqa` comment
+        // line (starts with `//`) on the line immediately before the matched
+        // line. Inline code+noqa on the preceding line is intentionally NOT
+        // accepted: since `//` is already valid inline on the matched line
+        // itself, allowing it on the line BEFORE would suppress a second
+        // violation on the following line (`eval(a); // noqa` then `eval(b)`
+        // would bypass both), weakening HARD findings unintentionally.
+        const prevIsJsStandalone =
+          isJsLikeFile &&
+          prevIsAdjacent &&
+          /^\s*\/\//.test(prevLine?.text ?? "");
+        const prevJsText = prevIsJsStandalone ? (prevLine?.text ?? "") : "";
+        const jsNoqaPrevAll =
+          isJsLikeFile && /(?:^|\s)\/\/\s*noqa\s*$/i.test(prevJsText);
+        const jsNoqaPrevId =
+          isJsLikeFile &&
+          new RegExp(
+            `(?:^|\\s)\\/\\/\\s*noqa:\\s*${escapedId}(?:\\s|$)`,
+            "i",
+          ).test(prevJsText);
+        if (
+          noqaAll ||
+          noqaId ||
+          noqaPrevAll ||
+          noqaPrevId ||
+          nolint ||
+          jsNoqaAll ||
+          jsNoqaId ||
+          jsNoqaPrevAll ||
+          jsNoqaPrevId
+        )
+          continue;
         findings.push({
           level: rule.level,
           rule: rule.id,

@@ -24,8 +24,19 @@ find to rule-pack ids from the catalog (`~/.claude/invariants/packs/`):
 | `Gemfile` exists | `rails` |
 | `requirements.txt` or `pyproject.toml` exists | `python` |
 | `go.mod` exists (or any `**/*.go` files) | `go` |
+| `pom.xml`, `build.gradle`, `build.gradle.kts`, or any `**/*.java` files exist | `java` |
+| any `**/*.csproj`/`**/*.sln` or `**/*.cs` files exist | `csharp` |
+| `composer.json` or any `**/*.php` files exist | `php` |
+| `Cargo.toml` or any `**/*.rs` files exist | `rust` |
+| any `**/*.sh` or `**/*.bash` files exist | `shell` |
 | any `**/*.tf` or `**/*.tf.json` files exist | `terraform` |
 | any `**/Dockerfile`, `**/Dockerfile.*`, or `**/*.Dockerfile` files exist | `docker` |
+| any `**/docker-compose*.y*ml` or `**/compose.y*ml` files exist | `docker-compose` |
+| any k8s manifests (a `**/*.yaml`/`**/*.yml` with `apiVersion:`+`kind:`, a `**/k8s/**` or `**/charts/**` dir, or `Chart.yaml`) | `kubernetes` |
+| any `**/.github/workflows/*.y*ml` files exist | `github-actions` |
+| any `**/playbook*.y*ml`, `**/roles/**/tasks/*.y*ml`, or `ansible.cfg` exist | `ansible` |
+| `package.json` deps contain `graphql`/`apollo-server`/`@apollo/server`/`mercurius` (or any `**/*.graphql`/`**/*.gql` files) | `graphql` |
+| any `**/nginx.conf`, `**/conf.d/*.conf`, or `**/sites-available/*` files exist | `nginx` |
 | renders a UI — deps contain `react`/`vue`/`svelte`/`@angular`/`solid-js`, OR the repo has `**/*.tsx`/`**/*.jsx`/`**/*.vue`/`**/*.svelte` files, OR server-rendered `.erb`/`.html.*` templates | `a11y` |
 | has a design system — Tailwind (`tailwind.config.*`), a tokens/theme dep (`@radix-ui/*`, `styled-components`, `@emotion/*`, `@chakra-ui/*`, a `tokens`/`design-system` package or dir), OR any UI pack was selected above | `design-system` |
 | `go.mod` exists | `go` |
@@ -56,9 +67,9 @@ seed the egress allowlist suggestion.
 
 **Cover gaps — prompt to add missing packs to dotfiles.** List the packs that
 actually exist (`ls ~/.claude/invariants/packs/*.json`). If the repo's detected
-stack includes a language/framework with NO matching pack (e.g. `rust`,
-`java`, `terraform`, or a framework like `nextjs`/`vue`/`django` lacking its own
-pack), that stack's specific invariants are NOT enforced — the repo gets only
+stack includes a language/framework with NO matching pack (e.g. a framework
+like `nextjs`/`vue`/`django`/`spring`, or a stack like `elixir`/`scala`
+lacking its own pack), that stack's specific invariants are NOT enforced — the repo gets only
 the universal built-ins plus whatever related packs exist. For EACH gap:
 
 - State it plainly: "⚠️ No invariant pack for `<X>` in the dotfiles catalog —

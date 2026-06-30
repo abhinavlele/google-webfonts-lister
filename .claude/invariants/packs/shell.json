@@ -1,0 +1,67 @@
+{
+  "id": "shell",
+  "description": "Shell / Bash script invariants for *.sh and *.bash. Deliberately conservative — every rule targets a pattern that is near-always a security problem (supply-chain pipe-to-shell, TLS verification disabled, host-key check disabled, catastrophic rm) or a clear smell (eval over an expansion, world-writable chmod). Diff-based and line-anchored: matches must start on an ADDED line. Mirrors the docker pack's approach (docker-curl-pipe-shell, docker-run-insecure-tls-flag) — the insecure-TLS short-flag branch is kept case-sensitive so curl's harmless -K (--config) is not confused with -k (--insecure). Rules: shell-curl-pipe-shell, shell-insecure-tls-download, shell-eval-with-expansion, shell-rm-rf-root, shell-rm-rf-variable, shell-chmod-world-writable, shell-ssh-disable-host-key.",
+  "rules": [
+    {
+      "//": "Piping a downloaded script straight into a shell (`curl ... | sh`, `wget ... | sudo bash`) is the classic supply-chain anti-pattern: the fetched content is unverified and can change between fetches. `^[^#\\n]*` anchors to the start of the line and forbids a `#` before the curl/wget invocation, so a comment line documenting the pattern (`# curl x | sh`) does not fire. `[^|]*` reaches across a backslash-continuation to a `| sh` on the next line within the window. The shell branch matches bare names (`sh`, `bash`) and absolute paths (`/bin/sh`, `/usr/bin/bash`) and tolerates an interposed `sudo`. Fix: fetch to a file, verify a pinned sha256, then execute.",
+      "id": "shell-curl-pipe-shell",
+      "severity": "hard",
+      "include": ["**/*.sh", "**/*.bash"],
+      "pattern": "^[^#\\n]*(?:curl|wget)\\b[^|]*\\|\\s*(?:sudo\\s+)?(?:/(?:usr/)?bin/)?(?:sh|bash)\\b",
+      "flags": "m",
+      "message": "Script pipes a downloaded payload directly into a shell (curl/wget | sh) — the fetched script is unverified and can be swapped upstream. Download to a file, verify a pinned sha256, then run it."
+    },
+    {
+      "//": "A download with certificate verification disabled (curl -k / --insecure, wget --no-check-certificate) defeats TLS — anyone on the network path can swap the artifact. The short-flag branch is case-sensitive: curl's `-K` is the harmless --config flag, only lowercase `-k` is --insecure, so the `i` flag is deliberately NOT set on this rule. `[^|\\n]*` confines each branch to the curl/wget invocation. `^\\s*(?!#).*` anchors to line start, skips comment lines (first non-blank char is `#`), and lets the dangerous flag appear anywhere on a non-comment line (single-line and continuation forms). Fix: fetch over verified TLS and check a pinned sha256.",
+      "id": "shell-insecure-tls-download",
+      "severity": "hard",
+      "include": ["**/*.sh", "**/*.bash"],
+      "pattern": "^\\s*(?!#).*(?:(?:curl|wget)\\b[^|\\n]*--insecure\\b|curl\\b[^|\\n]*\\s-[A-Za-z]*k[A-Za-z]*(?:\\s|$)|wget\\b[^|\\n]*--no-check-certificate\\b)",
+      "flags": "m",
+      "message": "Script downloads with TLS verification disabled (curl -k/--insecure or wget --no-check-certificate) — a network attacker can swap the payload. Fetch over verified TLS and check a pinned sha256. (curl's -K config flag is intentionally not flagged.)"
+    },
+    {
+      "//": "`eval` over a value that contains a `$` expansion or `$(...)` command substitution re-parses attacker-influenceable text as shell — a code-injection sink. The pattern requires a `$` somewhere after `eval` on the same line, so `eval \"echo static\"` (no expansion) is not flagged. WARN, not HARD: eval of a tightly-controlled internal value is occasionally legitimate; review the source of the expanded string and prefer arrays / direct invocation. `\\beval\\b` will not fire inside words like `retrieval` or `medieval`.",
+      "id": "shell-eval-with-expansion",
+      "severity": "warn",
+      "include": ["**/*.sh", "**/*.bash"],
+      "pattern": "\\beval\\b[^\\n]*\\$",
+      "message": "eval over a `$`-expansion / `$(...)` re-parses runtime text as shell — a command-injection sink if any part is externally influenced. Avoid eval; use arrays or direct invocation, and never eval untrusted input."
+    },
+    {
+      "//": "`rm -rf` (or -fr / -Rf, any flag order via the two alternations, `i` flag for upper-case R) whose target is the filesystem root — bare `/`, `/` then end-of-line, `/*` (root glob, same catastrophic effect), the end-of-options marker `-- /` or `-- /*`, or `/` immediately followed by a variable expansion (`/$VAR`, `/\"$VAR\"`) — is the catastrophic deletion. `(?:--\\s+)?` allows the common `rm -rf -- /` form where `--` signals end of options. `/\\*?` matches both `/` and `/*` (the root glob). The target must START with `/` (with or without `--` prefix), so `rm -rf ./build`, `rm -rf \"$dir/sub\"`, and `rm -rf /tmp/cache` (slash followed by a literal non-glob path component) are NOT flagged. `/$VAR` IS flagged because an empty/unset VAR degrades to `rm -rf /`.",
+      "id": "shell-rm-rf-root",
+      "severity": "hard",
+      "include": ["**/*.sh", "**/*.bash"],
+      "pattern": "\\brm\\s+-[a-zA-Z]*(?:r[a-zA-Z]*f|f[a-zA-Z]*r)[a-zA-Z]*\\s+(?:--\\s+)?/\\*?(?:\\s|$|[\"']?\\$)",
+      "flags": "i",
+      "message": "rm -rf targeting the filesystem root (`/`, `/*`, `-- /`, or `/$VAR` which becomes `/` when the variable is empty) — this can wipe the system. Use an explicit, validated path and guard against empty variables (`: \"${dir:?}\"`)."
+    },
+    {
+      "//": "Companion WARN to shell-rm-rf-root: `rm -rf` whose target is a bare variable expansion (`rm -rf $DIR`, `rm -rf \"$DIR\"`) — if the variable is empty or unset the command degrades toward deleting the current directory or `/`. WARN because the variable is often safe; HARDening would false-positive on the common `rm -rf \"$build_dir\"`. Fix: validate the variable is set and non-empty before use (`: \"${DIR:?must be set}\"`) and quote it.",
+      "id": "shell-rm-rf-variable",
+      "severity": "warn",
+      "include": ["**/*.sh", "**/*.bash"],
+      "pattern": "\\brm\\s+-[a-zA-Z]*(?:r[a-zA-Z]*f|f[a-zA-Z]*r)[a-zA-Z]*\\s+[\"']?\\$",
+      "flags": "i",
+      "message": "rm -rf with a variable as the target — an empty/unset variable makes this delete far more than intended. Guard with `: \"${VAR:?must be set}\"` and quote the expansion before deleting."
+    },
+    {
+      "//": "chmod 777 / 666 (or o+w / a+rwx / a=rwx) makes a path world-writable — any user or compromised process can overwrite it, a tamper and privilege-escalation vector, especially on scripts and config. `(?:-[A-Za-z]+\\s+)*` tolerates flags like `-R` before the mode. Ordinary modes (0755, 0644, 0600) do not match. WARN: a deliberate shared scratch dir can be annotated. Fix: grant the minimum mode (0755 executables, 0644 data) owned by the intended user.",
+      "id": "shell-chmod-world-writable",
+      "severity": "warn",
+      "include": ["**/*.sh", "**/*.bash"],
+      "pattern": "\\bchmod\\s+(?:-[A-Za-z]+\\s+)*(?:0?777|0?666|o\\+w|a\\+rwx|a=rwx)\\b",
+      "message": "chmod grants world-writable permissions (777/666/o+w) — any local process can tamper with the path. Grant the minimum mode (0755 executables, 0644 data) owned by the intended user."
+    },
+    {
+      "//": "Disabling SSH host-key verification (`StrictHostKeyChecking=no`, or `StrictHostKeyChecking no`) accepts ANY server key, defeating the check that prevents a man-in-the-middle on ssh/scp/sftp/rsync. `[=\\s]+` covers both the `-o KEY=value` and `-o KEY value` forms; the `i` flag matches ssh's case-insensitive option spelling. `accept-new` and `yes` are not flagged (the value must be exactly `no`). Fix: pre-populate known_hosts with a pinned key, or use `accept-new` for first-use-then-pin instead of `no`.",
+      "id": "shell-ssh-disable-host-key",
+      "severity": "hard",
+      "include": ["**/*.sh", "**/*.bash"],
+      "pattern": "StrictHostKeyChecking[=\\s]+no\\b",
+      "flags": "i",
+      "message": "StrictHostKeyChecking=no accepts any SSH host key — this enables a trivial MITM on the connection. Pin the key in known_hosts, or use `accept-new` (trust-on-first-use then pin) instead of `no`."
+    }
+  ]
+}
