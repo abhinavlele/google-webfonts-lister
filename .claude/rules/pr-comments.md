@@ -9,6 +9,24 @@ paths:
 
 Write as if a human engineer typed it. Trust the diff to speak for itself.
 
+## Length caps (hard)
+
+- **Commit message body: ≤ 3 sentences.** One paragraph. If the change
+  needs more explanation, it belongs in an ADR / design doc / PR body,
+  not the commit trailer. The subject line already summarizes; the body
+  is only for the *why* that isn't in the diff.
+- **PR / review comment: ≤ 3 sentences** unless a tradeoff needs
+  explaining, in which case a second paragraph is fine.
+- **Bulleted lists in commit bodies: don't.** Prose sentences read like
+  human intent; a bullet enumeration of "what changed" reads like
+  machine output and duplicates the diff.
+
+A verbose commit body is the strongest LLM tell — humans don't write
+four-paragraph commit messages for one-file fixes. If you find yourself
+wanting to explain the design tradeoff, the doc-line reference, the
+regression test rationale, and the follow-up in the same commit body,
+STOP: pick the one thing that's not in the diff and cut the rest.
+
 ## Forbidden phrasings
 
 - Announcing future actions: "Updating the description now", "Filing as a

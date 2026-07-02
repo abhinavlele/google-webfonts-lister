@@ -205,6 +205,32 @@
       ],
       "pattern": "\\btemplate\\.(?:HTML|JS|CSS|URL|HTMLAttr|JSStr|Srcset)\\(\\s*[a-zA-Z_]",
       "message": "template.HTML/JS/CSS/URL(... var ...) converts a runtime value into pre-trusted markup, bypassing html/template's contextual auto-escaping — an XSS sink if the value is user-influenced. Pass the raw value and let the template escape it, or sanitize first. If the input is a trusted constant, add `//nolint` with a justification."
+    },
+    {
+      "//": "Env vars whose NAME implies a runtime limit (SIZE/MAX/MIN/COUNT/LIMIT/CAPACITY/CONCURRENCY/WORKERS/POOL/BUFFER/BYTES/ITEMS/BATCH/FANOUT) SHOULD be bounded at Load() time. An unchecked strconv.Atoi(os.Getenv(...)) or getEnvInt(...) accepts 0, negative, and very large values — the batch-size cap evaporates, the worker-pool math wraps. Matches when the limit token appears as the whole env var name (e.g. WORKERS), as a suffix (e.g. BULK_WORKERS), or as a prefix (e.g. MAX_DEVICES, MIN_BATCH_SIZE), so PORT / RETRIES / etc are not flagged. If the code already uses getEnvIntInRange(...) (the bounded helper), the regex won't match because the negative-lookbehind rules out anything but bare getEnvInt(. Excludes test files. WARN: annotate with //nolint or refactor to a range-bounded helper.",
+      "id": "go-env-int-unbounded",
+      "severity": "warn",
+      "include": [
+        "**/*.go"
+      ],
+      "exclude": [
+        "**/*_test.go"
+      ],
+      "pattern": "(?:strconv\\.Atoi\\s*\\(\\s*os\\.Getenv\\s*\\(\\s*[\"'](?:[A-Z][A-Z0-9_]*_)?(?:SIZE|MAX|MIN|COUNT|LIMIT|CAPACITY|CONCURRENCY|WORKERS|POOL|BUFFER|BYTES|ITEMS|BATCH|FANOUT)(?:_[A-Z][A-Z0-9_]*)?[\"']|(?<![a-zA-Z_0-9])getEnvInt(?![a-zA-Z_0-9])\\s*\\(\\s*[\"'](?:[A-Z][A-Z0-9_]*_)?(?:SIZE|MAX|MIN|COUNT|LIMIT|CAPACITY|CONCURRENCY|WORKERS|POOL|BUFFER|BYTES|ITEMS|BATCH|FANOUT)(?:_[A-Z][A-Z0-9_]*)?[\"'])",
+      "message": "unbounded int env-var with a limit-shaped name — a ConfigMap value of 0, negative, or absurdly large silently disables the guard downstream code assumes exists. Wrap in a range-bounded parser (e.g. getEnvIntInRange(name, default, min, max)) that fails-closed at Load(). Reviewed and accepted: add //nolint with a justification comment."
+    },
+    {
+      "//": "An enum-shaped switch on a config value should reject unknown inputs, not silently fall back to a default value the ConfigMap author didn't ask for. Matches the same-line one-liner form `default: <var> = <expr>` — the most common shape for this bug. Multi-line `default:` + assign patterns are missed by design (line-level engine limitation; fall to human/security-reviewer). Comparison operators (`!=`, `<=`, `>=`, `==`) are excluded via the `(?!=)` sentinel after `=`. Assignments of boolean literals (true/false) and nil are excluded — those are common in Go channel-select default blocks and are not config-enum fallbacks. Leading whitespace uses `[ \\t]*` (horizontal only) so a blank added-line with a `default:` on the next line in the lookahead buffer does not produce a false positive. WARN: a deliberate default-assign (e.g. saturating a numeric to a cap, channel-select default, runtime.GOOS switch) is legitimate — annotate with //nolint and justify.",
+      "id": "go-enum-silent-fallback",
+      "severity": "warn",
+      "include": [
+        "**/*.go"
+      ],
+      "exclude": [
+        "**/*_test.go"
+      ],
+      "pattern": "^[ \\t]*default[ \\t]*:[ \\t]*[a-zA-Z_][a-zA-Z0-9_]*(?:\\.[a-zA-Z_][a-zA-Z0-9_]*)*[ \\t]*=(?!=)(?!\\s*(?:true|false|nil)(?:\\s|$|//))",
+      "message": "switch default: assigns a fallback value — if this is a config-enum switch, a typo becomes a silent choice instead of a fail-closed error. Prefer `default: return ..., fmt.Errorf(\"unknown %q\", v)` so callers fail loudly on unrecognized values. Reviewed and accepted (saturating cap, channel-select default, opt-in fallback with logged warning, etc.): add //nolint with a justification comment."
     }
   ]
 }

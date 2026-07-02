@@ -74,6 +74,58 @@ const CASES = [
   ["go-template-html-unescaped", "h.go", "return template.HTML(userContent)", true],
   ["go-template-html-unescaped", "h.go", 'return template.HTML("<br>")', false],
 
+  // -- Go: env-int unbounded (D3a — regression pin for saurabhsh5-class findings)
+  // True positives: getEnvInt / Atoi(Getenv) with a limit-shaped env var name.
+  ["go-env-int-unbounded", "config.go", 'getEnvInt("BULK_MAX_SIZE", 100)', true],
+  ["go-env-int-unbounded", "config.go", 'getEnvInt("BULK_CONCURRENCY", 10)', true],
+  ["go-env-int-unbounded", "config.go", 'strconv.Atoi(os.Getenv("MAX_ITEMS"))', true],
+  ["go-env-int-unbounded", "config.go", 'strconv.Atoi(os.Getenv("WORKER_POOL"))', true],
+  ["go-env-int-unbounded", "config.go", 'getEnvInt("CACHE_CAPACITY", 1024)', true],
+  // False positives suppressed: generic env-var names that aren't limit-shaped.
+  ["go-env-int-unbounded", "config.go", 'getEnvInt("PORT", 8080)', false],
+  ["go-env-int-unbounded", "config.go", 'getEnv("LOG_LEVEL", "info")', false],
+  // Already bounded — the -InRange helper must NOT match.
+  ["go-env-int-unbounded", "config.go", 'getEnvIntInRange("BULK_MAX_SIZE", 100, 1, 500)', false],
+  // Custom helper with getEnvInt in the middle of the name must NOT match.
+  ["go-env-int-unbounded", "config.go", 'MyGetEnvInt("BULK_MAX_SIZE", 100)', false],
+  // Versioned helper (digit prefix) must NOT match.
+  ["go-env-int-unbounded", "config.go", 'v2getEnvInt("BULK_MAX_SIZE", 100)', false],
+  // Bare limit-shaped env var name (no prefix) must match.
+  ["go-env-int-unbounded", "config.go", 'getEnvInt("WORKERS", 10)', true],
+  ["go-env-int-unbounded", "config.go", 'getEnvInt("CONCURRENCY", 10)', true],
+  ["go-env-int-unbounded", "config.go", 'strconv.Atoi(os.Getenv("BUFFER"))', true],
+  // Prefix-style limit token (limit word before underscore) must also match.
+  ["go-env-int-unbounded", "config.go", 'getEnvInt("MAX_DEVICES", 100)', true],
+  ["go-env-int-unbounded", "config.go", 'getEnvInt("MIN_BATCH_SIZE", 1)', true],
+  ["go-env-int-unbounded", "config.go", 'strconv.Atoi(os.Getenv("MAX_CONNECTIONS"))', true],
+  // Prefix-form widening — known-FP surface pinned so a future regex edit that
+  // shifts the boundary either way has to update this list deliberately. These
+  // names lead with a limit token but the WHOLE name is not a runtime-limit
+  // integer; the regex currently flags them (WARN, suppressible with //nolint).
+  // If a future edit tightens the pattern to suppress these, flip to `false`.
+  ["go-env-int-unbounded", "config.go", 'getEnvInt("POOL_NAME", 0)', true],
+  ["go-env-int-unbounded", "config.go", 'getEnvInt("BATCH_ID", 0)', true],
+  ["go-env-int-unbounded", "config.go", 'getEnvInt("WORKERS_URL", 0)', true],
+  ["go-env-int-unbounded", "config.go", 'getEnvInt("BUFFER_PATH", 0)', true],
+
+  // -- Go: enum silent-fallback (D3b)
+  // True positives: default: assigns a value (same-line one-liner form).
+  ["go-enum-silent-fallback", "config.go", "\tdefault: lvl = slog.LevelInfo", true],
+  ["go-enum-silent-fallback", "config.go", "\tdefault: cfg.LogLevel = \"info\"", true],
+  ["go-enum-silent-fallback", "config.go", "\tdefault: v = fallback", true],
+  ["go-enum-silent-fallback", "config.go", "\tdefault: cfg.Logging.Level = \"info\"", true],
+  // False positives suppressed: default: returns an error (fail-closed).
+  ["go-enum-silent-fallback", "config.go", "\tdefault: return nil, fmt.Errorf(\"bad %q\", v)", false],
+  ["go-enum-silent-fallback", "config.go", "\tdefault: return err", false],
+  // Assignment in a case, not default.
+  ["go-enum-silent-fallback", "config.go", "\tcase \"debug\": lvl = slog.LevelDebug", false],
+  // Comparison operators (!=, ==) mustn't trigger.
+  ["go-enum-silent-fallback", "config.go", "\tdefault: if x != nil { return x }", false],
+  // Boolean literals and nil are excluded (common in Go channel-select default blocks).
+  ["go-enum-silent-fallback", "config.go", "\tdefault: ready = true", false],
+  ["go-enum-silent-fallback", "config.go", "\tdefault: done = false", false],
+  ["go-enum-silent-fallback", "config.go", "\tdefault: x = nil", false],
+
   // -- Docker ----------------------------------------------------------------
   ["docker-run-insecure-tls-flag", "Dockerfile", "RUN curl -k https://x/i.sh -o i.sh", true],
   ["docker-run-insecure-tls-flag", "Dockerfile", "RUN wget --no-check-certificate https://x/a", true],

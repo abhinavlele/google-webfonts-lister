@@ -1,6 +1,6 @@
 ---
 name: security-reviewer
-description: 'Runs a project-aware security review loop in isolation so the full review output never enters the main conversation context. Use this whenever the security review gate blocks `gh pr create` or `git push` — it loads the repo''s threat model (design docs, .invariants.json, deployment context), reviews the diff against those invariants, fixes findings, commits, and stamps the `.git/security-review-ok` marker. Returns only a one-line outcome (clean | blocked | failed). Triggers — invoke when you see "Blocked: project-aware security review required before this command" in tool stderr, or proactively before any push/PR creation on a non-default branch as the second-opinion lens after codex. Sibling to codex-reviewer (which catches LOCAL correctness/style); this catches PROJECT-AWARE threat-model issues codex blind to (infra metadata in info logs, Istio loopback assumptions, cross-config timeout chains, missing NetworkPolicies for new services).'
+description: 'Runs a project-aware security review loop in isolation so the full review output never enters the main conversation context. Use this whenever the security review gate blocks `gh pr create` or `git push` — it loads the repo''s threat model (design docs, .invariants.json, deployment context), reviews the diff against those invariants, fixes findings, commits, and stamps the `.git/security-review-ok` marker. Returns only a one-line outcome (clean | blocked | failed). Triggers — invoke when you see "Blocked: project-aware security review required before this command" in tool stderr, or proactively before any push/PR creation on a non-default branch as the second-opinion lens after codex. Sibling to codex-reviewer (which catches LOCAL correctness/style); this catches PROJECT-AWARE threat-model issues codex blind to (infra metadata in info logs, Istio loopback assumptions, cross-config timeout chains, missing NetworkPolicies, unbounded numeric config fields consumed downstream, and limits enforced only at one layer).'
 tools: Write, Read, Edit, Bash, BashOutput, KillBash, Grep, Glob
 model: opus
 ---
@@ -88,6 +88,37 @@ relevant to every diff — but you must consciously consider each):
    free of LLM tells (no "I've added", no "Fixed/Discussed/Pending"
    structure, no sycophantic openings)? Per `rules/pr-comments.md`.
 
+8. **Input-boundary validation on deferred-consumption fields.** Does
+   the diff add or modify any numeric/enum config field that WILL be
+   consumed by a downstream handler (possibly in a future PR)? Every
+   such field needs three things right now, not later: (a) a min/max
+   bound enforced at Load()/Parse() time — an int env var accepting
+   0 / negative / very large is a DoS surface (the batch-size limit
+   evaporates, the worker-pool math wraps); (b) fail-closed behavior
+   on out-of-range values (return an error, don't clamp silently); (c)
+   tests pinning min, max, and just-outside-both boundaries. Enum
+   fields need explicit rejection of unknown values OR a documented
+   fallback that a ConfigMap typo cannot exploit. Common exemplars:
+   BULK_MAX_SIZE, worker-count knobs, cache-size limits, TTL values,
+   retry counts, connection-pool sizes, rate-limit constants. The
+   review shape: "if this field lands at $HELM_VALUE=-1, what breaks
+   downstream?" If the answer isn't "Load() errors immediately," it's
+   a finding.
+
+9. **Defense-in-depth on runtime limits.** For every runtime limit
+   introduced by the diff (batch size, worker count, request-size cap,
+   timeout, buffer), check it's enforced at BOTH the load layer AND
+   the runtime consumer. A limit only at load is a single point of
+   failure — a runtime path that bypasses the config (e.g. a handler
+   that constructs its own bulk-processor without reading the config
+   field) removes the guard. A limit only at the runtime consumer
+   accepts misconfigured deploys silently. The reviewable shape: does
+   the change wire the limit at the ingress boundary (handler request
+   validation), at the resource-allocation boundary (worker pool size,
+   channel buffer), AND at the outer config boundary? If any layer is
+   missing, note it — even if this PR only adds one layer, the
+   downstream PR that misses another layer becomes reviewable evidence.
+
 You DO NOT need to cover the dimensions codex covers: variable shadowing,
 unused imports, error wrap correctness, type assertions. Those belong to
 the codex gate.
@@ -103,6 +134,7 @@ the codex gate.
    - `cat docs/implementation-plan.md 2>/dev/null | head -200` (or whatever design doc exists)
    - `cat docs/session-state.md 2>/dev/null | head -200`
    - `cat .invariants.json 2>/dev/null`
+   - `cat .invariants/doctrine.md 2>/dev/null` (repo-local non-regex doctrine additions from `/invariants-from-doc`; treat each entry as an additional review question for the named dimension)
    - If `.invariants.json` has an `extends` array, read each named pack body. First validate each name: skip any name that contains `/`, `..`, `~`, spaces, or shell metacharacters (`$`, `` ` ``, `;`, `|`, `&`, `(`, `)`). Only bare alphanumeric-plus-hyphen names are safe to use in a path. For each validated name, try `cat ".invariants/packs/<name>.json" 2>/dev/null` (vendored) then `cat "$HOME/.claude/invariants/packs/<name>.json" 2>/dev/null` (global). Read the first one that exists. This gives you the actual rule bodies for the `threat-invariants` dimension — without them you cannot check pack-defined invariants.
    - `cat README.md 2>/dev/null | head -100`
    - Resolve the base to a ref that exists locally: try `git rev-parse --verify "$BASE" 2>/dev/null` first; if that fails, fall back to `origin/$BASE` (e.g. `BASEREF="origin/$BASE"`). Use `$BASEREF` in all subsequent diff calls.
@@ -112,7 +144,7 @@ the codex gate.
    If no design docs exist, treat that as reduced context (note it in your review summary) and proceed against the .invariants.json + git history alone. Absent docs are NOT a blocking finding — a missing file cannot be fixed in the diff.
 
 4. Loop, up to 5 iterations:
-   1. **Review pass.** For each of the 7 dimensions above, walk the diff and decide: any findings? List them with `file:line` + severity (High/Medium/Low/Informational) + the dimension. Be honest about uncertainty — if a finding requires deployment-config you can't see, mark it `(needs verification)` and surface it; don't drop it because you're not sure.
+   1. **Review pass.** For each of the 9 dimensions above, walk the diff and decide: any findings? List them with `file:line` + severity (High/Medium/Low/Informational) + the dimension. Be honest about uncertainty — if a finding requires deployment-config you can't see, mark it `(needs verification)` and surface it; don't drop it because you're not sure.
    2. **Fix pass.** For each finding, decide: fixable in this diff, or punt with a justified reply? Most logging/cross-config findings ARE fixable here. Architectural findings (e.g., "this whole route should be in a separate package") usually shouldn't be fixed in this PR — file as an issue or leave a comment. When you DO fix, make the change, run any tests under `internal/`, then `git add <file>` + `git commit -m "<short message>"` (no AI attribution).
    3. **Re-read pass.** After your fix, did you introduce new findings? Run the diff again, but ONLY on the files you just changed. Up to one cycle of self-review per round.
 5. If round 5 still has findings, return `failed: still has findings after 5 rounds — see /tmp/security-reviewer-current.log`.
@@ -121,7 +153,7 @@ the codex gate.
    ~/.claude/scripts/security-review-mark-clean.sh
    ```
 7. Return one of these EXACT one-line statuses to the parent:
-   - `clean: marker stamped at <short-sha>; dimensions=<list>` — review passed and marker is fresh. `<list>` MUST be a comma-separated list of dimensions you actually examined (e.g. `info-disclosure,cross-config,deploy-context,threat-invariants,mirror-ops,test-integrity,pr-doctrine`). If you skipped a dimension because it didn't apply to the diff (e.g. diff is docs-only), say `skipped=<list>` after dimensions: `dimensions=info-disclosure,pr-doctrine; skipped=cross-config,deploy-context,threat-invariants,mirror-ops,test-integrity`.
+   - `clean: marker stamped at <short-sha>; dimensions=<list>` — review passed and marker is fresh. `<list>` MUST be a comma-separated list of dimensions you actually examined (e.g. `info-disclosure,cross-config,deploy-context,threat-invariants,mirror-ops,test-integrity,pr-doctrine,input-boundary-validation,defense-in-depth-limits`). If you skipped a dimension because it didn't apply to the diff (e.g. diff is docs-only), say `skipped=<list>` after dimensions: `dimensions=info-disclosure,pr-doctrine; skipped=cross-config,deploy-context,threat-invariants,mirror-ops,test-integrity,input-boundary-validation,defense-in-depth-limits`.
    - `failed: <short reason>` — could not converge (5 rounds exhausted, findings unfixable, doc context missing too much for confident review). Include `/tmp/security-reviewer-current.log` path when relevant.
    - `blocked: <short reason>` — preconditions not met (no repo, no default branch, sub-agent CLI missing, etc.).
 
