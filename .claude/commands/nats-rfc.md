@@ -36,10 +36,10 @@ gh pr list --repo limebike/poc-code-yellow-nats --search "rfc/" --state open
 gh pr list --repo limebike/poc-code-yellow-nats --search "rfc/" --state merged --limit 15
 
 # Check RFC branch status
-git -C /Users/abhinav.lele/src/limebike/poc-code-yellow-nats branch -a | grep rfc
+git -C ~/src/limebike/poc-code-yellow-nats branch -a | grep rfc
 
 # Check for active worktrees
-git -C /Users/abhinav.lele/src/limebike/poc-code-yellow-nats worktree list | grep rfc
+git -C ~/src/limebike/poc-code-yellow-nats worktree list | grep rfc
 ```
 
 ## Step 4: Read Current RFC
@@ -48,7 +48,7 @@ Read the RFC on the latest RFC branch (not poc — the RFC lives on `rfc/nats-de
 
 ```bash
 # Find the latest RFC content
-git -C /Users/abhinav.lele/src/limebike/poc-code-yellow-nats show origin/rfc/nats-device-identity:rfc/nats-device-identity.md | wc -l
+git -C ~/src/limebike/poc-code-yellow-nats show origin/rfc/nats-device-identity:rfc/nats-device-identity.md | wc -l
 ```
 
 Then read `rfc/nats-device-identity.md` from whichever worktree has the latest RFC branch checked out.
