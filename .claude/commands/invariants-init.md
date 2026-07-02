@@ -278,3 +278,13 @@ Report to the user:
   standing invariant expressible as a regex over added lines belongs in
   `rules` (or, if stack-generic, as a new catalog pack —
   `~/.claude/invariants/README.md`).
+- **Design-doc extraction**. If the repo has a design doc — check for
+  `docs/implementation-plan.md`, `docs/design.md`, `docs/rfc/*.md`,
+  or the first Markdown file under `docs/` that reads like a design
+  (architecture / constraints / API contract sections) — point the
+  user at `/invariants-from-doc <path>`. That skill reads the doc
+  and proposes project-specific rules for numeric caps ("up to 100
+  devices"), enums ("one of X, Y, Z"), and never-always assertions
+  ("server never stores per-device seeds"). Proposal-and-review flow
+  — no files change until the user approves. Re-run when a doc
+  assertion changes.

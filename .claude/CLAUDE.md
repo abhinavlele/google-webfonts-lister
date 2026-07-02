@@ -18,7 +18,7 @@
 16. Surface assumptions explicitly — ask "What if this is wrong?"
 17. Git worktrees only, never `git checkout` for branch switching
 18. Two-reviewer gate before any PR create or push: delegate to BOTH `codex-reviewer` (local correctness) and `security-reviewer` (project-aware threat-model) sub-agents. Independent markers `codex-review-ok` + `security-review-ok`, both must be fresh for HEAD. Never run `codex review` inline. Never hardcode `main`.
-19. **CRITICAL — No LLM tells in PR comments / commits / descriptions.** Write as if a human typed it. Checklist: `rules/pr-comments.md`. No future-action announcements, no Fixed/Discussed/Pending bullet structure, no sycophantic openings, no multi-paragraph essays — short, specific, lead with substance.
+19. **CRITICAL — No LLM tells in PR comments / commits / descriptions. Keep them short.** Commit body ≤ 3 sentences. PR / review comments ≤ 3 sentences unless a tradeoff needs explaining. No future-action announcements, no Fixed/Discussed/Pending bullet structure, no sycophantic openings, no multi-paragraph essays. Checklist: `rules/pr-comments.md`.
 
 ## Review Gates (Enforced)
 
