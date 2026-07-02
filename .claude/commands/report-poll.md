@@ -22,7 +22,7 @@ All work happens in worktree: ../poc-nats-reports
 Main working directory is NEVER modified.
 
 If you close this terminal, resume polling with:
-  cd /Users/abhinav.lele/src/limebike/poc-code-yellow-nats
+  cd ~/src/limebike/poc-code-yellow-nats
   claude
   /report-poll
 
@@ -619,7 +619,7 @@ TeamDelete()
 Return to the main repo working directory:
 
 ```bash
-cd /Users/abhinav.lele/src/limebike/poc-code-yellow-nats
+cd ~/src/limebike/poc-code-yellow-nats
 ```
 
 ### 12. PRINT VISUAL PROGRESS DASHBOARD

@@ -263,7 +263,7 @@ Print the PR URL.
 ## 8. RETURN TO MAIN DIRECTORY
 
 ```bash
-cd /Users/abhinav.lele/src/limebike/poc-code-yellow-nats
+cd ~/src/limebike/poc-code-yellow-nats
 ```
 
 **Do NOT remove the worktree.** It persists for future runs and for report-poll.
