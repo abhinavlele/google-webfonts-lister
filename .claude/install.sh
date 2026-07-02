@@ -33,7 +33,11 @@ echo "Creating symlinks..."
 # the source dir, cleaning the source also clears the loop seen via ~/.claude.
 cleanup_self_symlinks() {
     local dir="$1"
-    [[ -d "$dir" ]] || return
+    # No-op for non-directories (e.g. CLAUDE.md). Must `return 0`: a bare
+    # `return` propagates the failed `-d` test (exit 1) and `set -e` then
+    # kills install.sh mid-run, skipping later steps (settings.json install,
+    # chmod, etc.).
+    [[ -d "$dir" ]] || return 0
     local dir_real entry entry_real
     dir_real="$(cd "$dir" && pwd -P)"
     for entry in "$dir"/*; do
