@@ -15,9 +15,9 @@ import { lintCustomRules } from "./invariant-lint.mjs";
 
 const PACK_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "invariants", "packs");
 
-// Index every rule across the three packs by id.
+// Index every rule across the packs by id.
 const byId = {};
-for (const id of ["go", "docker", "terraform"]) {
+for (const id of ["go", "docker", "terraform", "secrets"]) {
   const pack = JSON.parse(readFileSync(path.join(PACK_DIR, `${id}.json`), "utf8"));
   for (const r of pack.rules) byId[r.id] = r;
 }
@@ -124,6 +124,41 @@ const CASES = [
   ["terraform-provisioner-exec", "main.tf", '  provisioner "file" {', false],
   ["terraform-weak-tls-policy", "main.tf", '  minimum_protocol_version = "TLSv1.1"', true],
   ["terraform-weak-tls-policy", "main.tf", '  minimum_protocol_version = "TLSv1.2_2021"', false],
+
+  // -- Secrets: infra-metadata (regression pins for the false-positive fix
+  // that motivated the ,\s*\S tightening — jmaredia flagged both the true
+  // positive on device-identity main.go and the false positive on the
+  // config_test.go env-var slice literal).
+  ["secrets-infra-metadata-field-key", "main.go", '\t\t"identity_table", cfg.IdentityTable,', true],
+  ["secrets-infra-metadata-field-key", "main.go", '\t\t"table", tableName,', true],
+  ["secrets-infra-metadata-field-key", "main.go", '    "role_arn", roleARN,', true],
+  ["secrets-infra-metadata-field-key", "main.go", '    "account_id", accountID,', true],
+  // Slice-literal element on its own line: comma with nothing after must NOT
+  // match. This is the config_test.go:16 case.
+  ["secrets-infra-metadata-field-key", "config.go", '\t"IDENTITY_TABLE",', false],
+  ["secrets-infra-metadata-field-key", "config.go", '\t"AWS_REGION",', false],
+  ["secrets-infra-metadata-field-key", "config.go", '\t"IDENTITY_TABLE",  ', false],
+  // Cross-line case: slice literal with the NEXT element on the following
+  // line. The engine lints inside a multi-line lookahead buffer, so a naive
+  // `\s*\S` after the comma would cross the newline and match the next
+  // element's opening quote. The [^\S\n]* horizontal-only whitespace class
+  // in the pack pattern is what prevents this. If someone loosens it back
+  // to \s*, this case regresses.
+  ["secrets-infra-metadata-field-key", "config.go", '\t"IDENTITY_TABLE",\n\t"AWS_REGION",', false],
+  ["secrets-infra-metadata-field-key", "config.go", '\t"table",\n\t"port",', false],
+  // Inline-comment case: slice literal element followed by a language comment
+  // on the same line. The naive `,\s*\S` would treat the `//`/`#` opener as a
+  // matching non-whitespace token; the (?!//|#|/\*) negative lookahead is
+  // what excludes it. A regression that drops the lookahead re-noises this.
+  ["secrets-infra-metadata-field-key", "config.go", '\t"IDENTITY_TABLE", // required', false],
+  ["secrets-infra-metadata-field-key", "config.go", '\t"table", /* env var */', false],
+  ["secrets-infra-metadata-field-key", "config.py", '    "table",  # comment', false],
+  // Log field-key + value + trailing comment should STILL fire — the value
+  // comes before the comment.
+  ["secrets-infra-metadata-field-key", "main.go", '\t"table", tableName, // note', true],
+  ["secrets-infra-metadata-in-info-log", "main.go", 'log.Info("starting", "identity_table", cfg.Table)', true],
+  ["secrets-infra-metadata-in-info-log", "main.go", 'slog.Info("ready", "role_arn", roleARN)', true],
+  ["secrets-infra-metadata-in-info-log", "main.go", 'log.Info("starting", "port", port)', false],
 ];
 
 for (const [ruleId, file, line, expect] of CASES) {
@@ -138,5 +173,35 @@ for (const [ruleId, file, line, expect] of CASES) {
 test("all pack rules compile", () => {
   for (const [id, r] of Object.entries(byId)) {
     assert.doesNotThrow(() => new RegExp(r.pattern, r.flags || ""), `rule ${id} regex must compile`);
+  }
+});
+
+// The infra-metadata rules exclude conventional test files. A regression that
+// removes the `exclude` key would silently re-introduce the noise the fix was
+// meant to eliminate. Pin the list — additions are fine, removals must be
+// deliberate.
+test("secrets-infra-metadata rules exclude test files", () => {
+  const requiredExcludes = [
+    "**/*_test.go",
+    "**/test_*.py",
+    "**/*_test.py",
+    "**/*_spec.rb",
+    "**/*_test.rb",
+    "**/*.test.ts",
+    "**/*.spec.ts",
+    "**/*.test.tsx",
+    "**/*.spec.tsx",
+    "**/*.test.js",
+    "**/*.spec.js",
+  ];
+  for (const id of ["secrets-infra-metadata-in-info-log", "secrets-infra-metadata-field-key"]) {
+    const rule = byId[id];
+    assert.ok(Array.isArray(rule.exclude), `${id} must declare an exclude array`);
+    for (const glob of requiredExcludes) {
+      assert.ok(
+        rule.exclude.includes(glob),
+        `${id} exclude must include ${glob} (removing this re-noises the pack)`,
+      );
+    }
   }
 });
