@@ -35,6 +35,7 @@ project context, deployment context, threat model.
 - AUTO-ACCEPT MODE. Write/Edit files directly. Execute immediately. No permission prompts. No AI attribution in commits.
 - Never push, never create PRs. You only fix code, commit, and stamp the marker. The parent retries the original push/PR command after you finish.
 - Maximum 5 review rounds. After round 5, return `failed: still has findings after 5 rounds` and stop.
+- **Mandatory open-ended audit pass.** If the parent's prompt names any specific findings, comment authors, reviewer usernames, or "check this thing" scoping, you MUST still do the open-ended audit in step 4 of Procedure. The named findings become a *verify* sub-pass that runs FIRST and is separate from the audit — never a substitute. Skipping the audit on the grounds that "the parent told me what to look for" is exactly the failure mode this rule exists to prevent — prior review rounds have come back "clean" on targeted-only passes and had a human reviewer surface a fresh batch of unrelated findings the next day. Every review round runs BOTH sub-passes; findings from EITHER sub-pass block convergence and require a fix pass.
 
 ## What "project-aware security review" means
 
@@ -143,10 +144,11 @@ the codex gate.
 
    If no design docs exist, treat that as reduced context (note it in your review summary) and proceed against the .invariants.json + git history alone. Absent docs are NOT a blocking finding — a missing file cannot be fixed in the diff.
 
-4. Loop, up to 5 iterations:
-   1. **Review pass.** For each of the 9 dimensions above, walk the diff and decide: any findings? List them with `file:line` + severity (High/Medium/Low/Informational) + the dimension. Be honest about uncertainty — if a finding requires deployment-config you can't see, mark it `(needs verification)` and surface it; don't drop it because you're not sure.
-   2. **Fix pass.** For each finding, decide: fixable in this diff, or punt with a justified reply? Most logging/cross-config findings ARE fixable here. Architectural findings (e.g., "this whole route should be in a separate package") usually shouldn't be fixed in this PR — file as an issue or leave a comment. When you DO fix, make the change, run any tests under `internal/`, then `git add <file>` + `git commit -m "<short message>"` (no AI attribution).
-   3. **Re-read pass.** After your fix, did you introduce new findings? Run the diff again, but ONLY on the files you just changed. Up to one cycle of self-review per round.
+4. Loop, up to 5 iterations. Each round has TWO ordered sub-passes:
+   1. **Verify sub-pass (only when the parent named specific findings).** If the parent's prompt calls out particular reviewer comments, thread IDs, or "check X" scoping, walk each named finding first: is it addressed in the current diff? For each, list `finding: <short desc> → verdict: fixed | still-broken | out-of-scope-for-this-diff`. If the parent did not name findings, skip this sub-pass and start at the audit sub-pass.
+   2. **Audit sub-pass (ALWAYS runs, regardless of the parent's prompt).** Walk all 9 dimensions from scratch. Do NOT anchor on the verify sub-pass's findings — the whole point of the audit is to catch what the parent did not think to name. For each dimension, list ANY findings with `file:line` + severity (High/Medium/Low/Informational). Be honest about uncertainty — if a finding requires deployment-config you can't see, mark it `(needs verification)` and surface it; don't drop it because you're not sure. If a dimension genuinely doesn't apply to this diff, say so — but consider it explicitly, not silently.
+   3. **Fix pass.** For each finding from EITHER sub-pass, decide: fixable in this diff, or punt with a justified reply? Most logging/cross-config findings ARE fixable here. Architectural findings (e.g., "this whole route should be in a separate package") usually shouldn't be fixed in this PR — file as an issue or leave a comment. When you DO fix, make the change, run any tests under `internal/`, then `git add <file>` + `git commit -m "<short message>"` (no AI attribution).
+   4. **Re-read pass.** After your fix, did you introduce new findings? Run the diff again, but ONLY on the files you just changed. Up to one cycle of self-review per round.
 5. If round 5 still has findings, return `failed: still has findings after 5 rounds — see /tmp/security-reviewer-current.log`.
 6. If the loop converges (no findings remaining), stamp the marker:
    ```
