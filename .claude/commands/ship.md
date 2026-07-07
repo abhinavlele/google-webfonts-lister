@@ -126,8 +126,22 @@ the worktree's markers and would block:
 git -C <worktree> push -u origin <branch>
 ( cd <worktree> && gh pr create --base <default> --head <branch> --title "…" --body "…" )
 ```
-Then wait for checks to settle (`gh pr checks <n>`), including any deploy/build
-check. On green, `gh pr merge <n> --squash`. On `--no-merge`, stop here.
+**CI must be watched, not assumed.** `gh pr create` returns as soon as GitHub
+accepts the branch, before any check has run — the CLI has no webhook signal
+that would tell you a check failed later, so you MUST poll or the failure is
+invisible until the next `gh pr checks` invocation:
+```bash
+gh pr checks <n> --watch --fail-fast --interval 10
+```
+`--watch` blocks until every check finishes; `--fail-fast` returns non-zero
+the moment any check fails (so you don't wait 20 minutes for a 30-second lint
+failure); `--interval 10` polls every 10s. Do this on `--no-merge` too — the
+point of a PR is that CI ran, not that it exists. If checks fail, inspect
+the failed logs (`gh run view <run-id> --log-failed`), fix in the worktree,
+spawn the reviewers again to re-stamp, and re-push. Do NOT report the PR as
+"shipped" until CI is green (or explicitly-approved-red on `--no-merge`).
+
+On green, `gh pr merge <n> --squash`. On `--no-merge`, stop here.
 After merge: remove the worktree, delete the local + remote branch, and
 fast-forward the local default branch. Phase 1 never switches the main
 checkout, so do NOT `merge` into whatever it currently has out — fetch directly

@@ -41,7 +41,11 @@ project context, deployment context, threat model.
 
 You are looking for findings that a project-blind reviewer would miss.
 These are the dimensions you MUST cover (not all of these will be
-relevant to every diff — but you must consciously consider each):
+relevant to every diff — but you must consciously consider each; the
+invariant-rule meta dimension only applies when the diff touches
+`.invariants.json`, `.invariants/**`, `scripts/invariant-lint.mjs`,
+`claude/invariants/**`, or `claude/scripts/invariant-lint.mjs`,
+but it MUST be applied then, not skipped):
 
 1. **Information disclosure in logs / errors / responses.** Does the diff
    add any info-level log field, error message, or response body that
@@ -120,6 +124,62 @@ relevant to every diff — but you must consciously consider each):
    missing, note it — even if this PR only adds one layer, the
    downstream PR that misses another layer becomes reviewable evidence.
 
+10. **Invariant-rule meta-review.** MANDATORY whenever the diff touches
+    `.invariants.json`, `.invariants/**`, `scripts/invariant-lint.mjs`,
+    `claude/invariants/**`, or `claude/scripts/invariant-lint.mjs`.
+    Rule changes are configuration masquerading as prose; a rule that
+    "exists" but is trivially bypassable is worse than no rule (it
+    manufactures false confidence in review dashboards). Walk every
+    added or modified rule against these sub-checks:
+    - **Bypass enumeration.** Write out three plausible shapes that
+      *should* trigger the rule and confirm each matches the `pattern`.
+      Include semantic siblings of what the rule targets: if it fires
+      on `if v, ok := ...; ok {`, does it also catch the two-line form
+      `v, ok := ...` / `if ok {`? If it fires on
+      `attrRevoked|attrActive`, what about a new attribute a future PR
+      would add (`attrSuspended`, `attrBlocked`)? Missed shapes must
+      be either added to `pattern` OR documented as known gaps in the
+      rule's `//` comment with a pointer to the doctrine backstop.
+    - **safePattern hygiene.** A `safePattern` must match CODE, not
+      bare prose. A safePattern like `"DEPLOY_ENV"` is a finding — a
+      doc comment `// DEPLOY_ENV is loaded separately` in the lookbehind
+      window would suppress the finding with no real guard. Require the
+      safePattern to reference an actual code shape (function call,
+      field access, import) — e.g.
+      `os\.(?:Getenv|LookupEnv)\("DEPLOY_ENV"\)|cfg\.DeployEnv\b`.
+      Same for `pattern`: patterns matching bare words that appear in
+      variable names / doc strings will false-positive.
+    - **Doctrine reconciliation.** If the PR body cites a source list
+      of findings the rules encode (e.g. "encodes M1..M6 from review
+      X"), count the doctrine bullets + regex rules and confirm each
+      source finding has AT LEAST ONE landing spot. A finding cited by
+      name in the PR body with no rule and no doctrine bullet is a
+      hard finding.
+    - **include/exclude scope.** Are the `include` globs narrow enough
+      to avoid firing on unrelated files, AND broad enough to cover
+      every code path where the invariant matters? A rule including
+      only `internal/store/**` when the invariant also applies to
+      `internal/handler/**` is enforced on N−1 of N paths.
+    - **Test coverage of the rule itself.** For each new regex rule,
+      is there a fixture (pre-fix commit SHA cited in the PR body, or
+      a `.invariants-tests/` fixture) proving the rule fires? A rule
+      landed without a positive-case fixture is prose, not enforcement.
+    - **Linter behavior changes** (only when the diff touches the linter
+      script itself without adding or modifying regex rules). Walk:
+      (a) any new code path — does it handle all rule types the existing
+      code handles (regex, `safePattern`, include/exclude, severity
+      escalation)? An unhandled type passes silently; (b) any changed
+      code path — state the before/after behavior for each affected rule
+      type; a severity downgrade is a finding; (c) new or widened bypass
+      surface — each new CLI flag, env-var, or config key that suppresses
+      findings must have a matching CI guard or written justification;
+      (d) exit-code contract — the linter exits non-zero on HARD findings;
+      confirm the change does not alter that contract for any existing HARD
+      rule.
+
+    Findings from this dimension are HIGH severity — a broken rule
+    silently degrades every future review round that trusts it.
+
 You DO NOT need to cover the dimensions codex covers: variable shadowing,
 unused imports, error wrap correctness, type assertions. Those belong to
 the codex gate.
@@ -146,7 +206,7 @@ the codex gate.
 
 4. Loop, up to 5 iterations. Each round has TWO ordered sub-passes:
    1. **Verify sub-pass (only when the parent named specific findings).** If the parent's prompt calls out particular reviewer comments, thread IDs, or "check X" scoping, walk each named finding first: is it addressed in the current diff? For each, list `finding: <short desc> → verdict: fixed | still-broken | out-of-scope-for-this-diff`. If the parent did not name findings, skip this sub-pass and start at the audit sub-pass.
-   2. **Audit sub-pass (ALWAYS runs, regardless of the parent's prompt).** Walk all 9 dimensions from scratch. Do NOT anchor on the verify sub-pass's findings — the whole point of the audit is to catch what the parent did not think to name. For each dimension, list ANY findings with `file:line` + severity (High/Medium/Low/Informational). Be honest about uncertainty — if a finding requires deployment-config you can't see, mark it `(needs verification)` and surface it; don't drop it because you're not sure. If a dimension genuinely doesn't apply to this diff, say so — but consider it explicitly, not silently.
+   2. **Audit sub-pass (ALWAYS runs, regardless of the parent's prompt).** Walk all 10 dimensions from scratch. Do NOT anchor on the verify sub-pass's findings — the whole point of the audit is to catch what the parent did not think to name. For each dimension, list ANY findings with `file:line` + severity (High/Medium/Low/Informational). Be honest about uncertainty — if a finding requires deployment-config you can't see, mark it `(needs verification)` and surface it; don't drop it because you're not sure. If a dimension genuinely doesn't apply to this diff, say so — but consider it explicitly, not silently.
    3. **Fix pass.** For each finding from EITHER sub-pass, decide: fixable in this diff, or punt with a justified reply? Most logging/cross-config findings ARE fixable here. Architectural findings (e.g., "this whole route should be in a separate package") usually shouldn't be fixed in this PR — file as an issue or leave a comment. When you DO fix, make the change, run any tests under `internal/`, then `git add <file>` + `git commit -m "<short message>"` (no AI attribution).
    4. **Re-read pass.** After your fix, did you introduce new findings? Run the diff again, but ONLY on the files you just changed. Up to one cycle of self-review per round.
 5. If round 5 still has findings, return `failed: still has findings after 5 rounds — see /tmp/security-reviewer-current.log`.
@@ -155,7 +215,7 @@ the codex gate.
    ~/.claude/scripts/security-review-mark-clean.sh
    ```
 7. Return one of these EXACT one-line statuses to the parent:
-   - `clean: marker stamped at <short-sha>; dimensions=<list>` — review passed and marker is fresh. `<list>` MUST be a comma-separated list of dimensions you actually examined (e.g. `info-disclosure,cross-config,deploy-context,threat-invariants,mirror-ops,test-integrity,pr-doctrine,input-boundary-validation,defense-in-depth-limits`). If you skipped a dimension because it didn't apply to the diff (e.g. diff is docs-only), say `skipped=<list>` after dimensions: `dimensions=info-disclosure,pr-doctrine; skipped=cross-config,deploy-context,threat-invariants,mirror-ops,test-integrity,input-boundary-validation,defense-in-depth-limits`.
+   - `clean: marker stamped at <short-sha>; dimensions=<list>` — review passed and marker is fresh. `<list>` MUST be a comma-separated list of dimensions you actually examined (e.g. `info-disclosure,cross-config,deploy-context,threat-invariants,mirror-ops,test-integrity,pr-doctrine,input-boundary-validation,defense-in-depth-limits,invariant-rule-meta`). If you skipped a dimension because it didn't apply to the diff (e.g. diff is docs-only, or diff doesn't touch invariant rules), say `skipped=<list>` after dimensions.
    - `failed: <short reason>` — could not converge (5 rounds exhausted, findings unfixable, doc context missing too much for confident review). Include `/tmp/security-reviewer-current.log` path when relevant.
    - `blocked: <short reason>` — preconditions not met (no repo, no default branch, sub-agent CLI missing, etc.).
 
