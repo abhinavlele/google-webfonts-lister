@@ -47,6 +47,10 @@ notes — it must exist somewhere reviewable):
    inject through the new parameter, smuggle a traversal name, replay the
    batch, cross the tenant boundary. Tests encode invariants, not behavior:
    a happy-path test is documentation, not defense.
+7. **Meta-review for rule/config-as-code.** When the diff modifies invariant
+   rules or the linter, the rule IS the code — apply items 1–6 to it. A
+   bypassable rule manufactures false confidence in every future review.
+   `/selfreview`'s `<invariantreview>` section has the full checklist.
 
 A change is not ready to commit until every item above has an answer.
 

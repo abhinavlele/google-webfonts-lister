@@ -141,6 +141,10 @@
           },
           {
             "type": "command",
+            "command": "~/.claude/hooks/wrappers/budget_gate.sh"
+          },
+          {
+            "type": "command",
             "command": "~/.claude/hooks/wrappers/running_blind_guard.sh"
           },
           {

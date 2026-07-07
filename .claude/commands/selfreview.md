@@ -69,6 +69,72 @@ behavior.
 
 </selfreview>
 
+## 2a. Rule-edit pass — invariant-rule meta-review (only if the diff touches `.invariants.json`, `.invariants/**`, `scripts/invariant-lint.mjs`, `claude/invariants/**`, or `claude/scripts/invariant-lint.mjs`)
+
+If the diff modifies invariant rules OR the linter, the rules
+themselves are the code — a bypassable rule is worse than no rule
+because it manufactures false confidence in every future review round.
+Skip this section if the diff does not touch those paths (repo-local or dotfiles-global); otherwise
+write out, item by item:
+
+<invariantreview>
+
+### Bypass enumeration
+For each added or modified regex rule: three plausible shapes that
+*should* trigger it. Confirm each matches the `pattern` (run
+`node scripts/invariant-lint.mjs` for repo-local rules, or
+`node claude/scripts/invariant-lint.mjs` for dotfiles-global rules,
+against a fixture / pre-fix SHA that contains them). Include semantic siblings — if the rule fires
+on `if v, ok := ...; ok {`, does it also catch the two-line form
+`v, ok := ...` / `if ok {`? Missed shapes go into `pattern` or into
+the rule's `//` comment as a documented gap with a doctrine backstop.
+
+### safePattern hygiene
+For each rule with a `safePattern`: does it match CODE (function
+call, field access, import) or bare prose? A safePattern like
+`"DEPLOY_ENV"` is unsound — a doc comment `// DEPLOY_ENV is loaded
+separately` in the lookbehind window would silently suppress the
+finding. Same for `pattern`: bare words that also appear in variable
+names, log strings, or doc comments will false-positive.
+
+### Doctrine reconciliation
+If the PR body / commit message cites a source list of findings the
+rules encode (e.g. "encodes M1..M6 from review X"), count the
+doctrine bullets + regex rules and confirm each source finding has
+AT LEAST ONE landing spot. A finding cited by name with no rule and
+no doctrine bullet is a gap.
+
+### Include/exclude symmetry
+Are the `include` globs narrow enough to avoid firing on unrelated
+files AND broad enough to cover every code path where the invariant
+matters? A rule including only `internal/store/**` when the
+invariant also applies to `internal/handler/**` is enforced on N−1
+of N paths.
+
+### Rule test coverage
+For each new regex rule: name the fixture (a pre-fix commit SHA
+cited in the PR body, or a `.invariants-tests/` sample) that proves
+the rule fires. A rule landed without a positive-case fixture is
+prose, not enforcement.
+
+### Linter behavior changes (only when the diff touches `scripts/invariant-lint.mjs` or `claude/scripts/invariant-lint.mjs`)
+Even if no regex rule changed, a linter-only diff can silently alter
+enforcement. Walk these:
+- **New code path added:** does it handle all rule types the existing
+  code handles (regex, `safePattern`, include/exclude, severity
+  escalation)? An unhandled type passes silently.
+- **Existing code path changed:** identify which rule types and
+  findings are affected. For each, state the before/after behavior —
+  "was hard-STOP, now WARN" is a severity downgrade, not a cleanup.
+- **Bypass surface:** does the change add or widen any CLI flag,
+  env-var, or config key that can suppress findings? Each new bypass
+  must have a matching CI guard or a written justification.
+- **Exit-code contract:** the linter exits non-zero on HARD findings.
+  Confirm the change does not alter that contract for any existing
+  HARD rule.
+
+</invariantreview>
+
 ## 2b. UX pass — ux-doctrine (only if the diff touches a user interface)
 
 If the diff changes any UI (`.tsx`/`.jsx`/`.vue`/`.svelte`/`.html`/`.erb`
