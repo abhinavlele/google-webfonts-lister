@@ -18,28 +18,27 @@
 16. Surface assumptions explicitly — ask "What if this is wrong?"
 17. Git worktrees only, never `git checkout` for branch switching
 18. Two-reviewer gate before any PR create or push: delegate to BOTH `codex-reviewer` (local correctness) and `security-reviewer` (project-aware threat-model) sub-agents. Independent markers `codex-review-ok` + `security-review-ok`, both must be fresh for HEAD. Never run `codex review` inline. Never hardcode `main`.
-19. **CRITICAL — No LLM tells in PR comments / commits / descriptions. Keep them short.** Commit body ≤ 3 sentences. PR / review comments ≤ 3 sentences unless a tradeoff needs explaining. No future-action announcements, no Fixed/Discussed/Pending bullet structure, no sycophantic openings, no multi-paragraph essays. Checklist: `rules/pr-comments.md`.
+19. **CRITICAL — No LLM tells in PR comments / commits / descriptions. Keep them short.** Checklist: `rules/pr-comments.md`. **ENFORCED** by `pr_writer_gate.py` — see "PR Writer Gate" below.
 
 ## Review Gates (Enforced)
 
-Two sibling `PreToolUse` hooks block `gh pr create` and `git push` (non-default branch) until BOTH markers are fresh for HEAD:
+Two `PreToolUse` hooks block `gh pr create` / `git push` (non-default branch) until BOTH markers are fresh for HEAD:
+- `codex_review_gate.py` → `.git/codex-review-ok`. Spawn `codex-reviewer` (review→fix→commit→≤5 rounds→stamp). Codex via `~/.claude/scripts/codex-isolated.sh`. Bypass: `SKIP_CODEX_REVIEW=1`.
+- `security_review_gate.py` → `.git/security-review-ok`. Spawn `security-reviewer` — loads `.invariants.json` + design docs + deployment context. Bypass: `SKIP_SECURITY_REVIEW=1`.
 
-- `codex_review_gate.py` → marker `.git/codex-review-ok`. Spawn the `codex-reviewer` sub-agent (review → fix → commit → ≤5 rounds → stamp). Codex runs via `~/.claude/scripts/codex-isolated.sh` (fresh empty HOME, prevents `~/.codex` session-store replay). Bypass: `SKIP_CODEX_REVIEW=1 <cmd>`.
-- `security_review_gate.py` → marker `.git/security-review-ok`. Spawn the `security-reviewer` sub-agent — loads the repo's `.invariants.json` + design docs + deployment context, reviews against project-aware threat-model dimensions. Bypass: `SKIP_SECURITY_REVIEW=1 <cmd>`.
+Markers are HEAD-pinned. Why two gates: memory `feedback_codex_alone_missed_jmaredia_findings.md`, `feedback_two_review_gates_drift.md`.
 
-Both reviewers return `clean: marker stamped at <sha>; dimensions=<list>`. Markers are HEAD-pinned — any new commit invalidates them.
+## PR Writer Gate (Enforced)
 
-Why two gates / the duplication tech-debt / past misses are in the memory notes `feedback_codex_alone_missed_jmaredia_findings.md` and `feedback_two_review_gates_drift.md`.
+`pr_writer_gate.py` blocks every path that emits public prose — `gh pr comment/create/edit/review`, `gh issue comment/create/edit`, `gh release create/edit`, `gh api` with non-GET method against issues/pulls/comments/releases, and `git commit` with a body (`-F`, `--file=`, `--amend`, two `-m`, or bare `git commit` → editor). Subject-only `git commit -m "subject"` and read-only `gh` (view/list/diff/checks/status/api GET) stay allowed. Only the `pr-comment-writer` sub-agent may pass: it touches `~/.claude/state/pr-writer.active` (mtime < 5min) as its first action. Bypass: `SKIP_PR_WRITER_GATE=1 <cmd>`.
 
 ## CI Gate (Enforced)
 
-A `PreToolUse` hook (`~/.claude/hooks/ci_gate.py`) **blocks** `gh pr merge` while the target PR's CI is failing/pending/cancelled — never merge on red or unfinished CI. Allows when all checks pass/skipping, none exist, or `--auto` is used (it then blocks only on already-failed checks). Fail-OPEN on an indeterminate state so it can't deadlock. When blocked, wait for green (`gh pr checks --watch`) or fix failures, then retry. Bypass sparingly: `SKIP_CI_GATE=1 <cmd>`.
+`ci_gate.py` blocks `gh pr merge` while CI is failing/pending/cancelled. Allows when checks pass/skipping, none exist, or `--auto` is used (then only blocks on already-failed checks). Fail-OPEN on indeterminate state. Bypass: `SKIP_CI_GATE=1`.
 
 ## Generation Doctrine (Enforced)
 
-Full adversarial self-review checklist: `rules/generation-doctrine.md` (always loaded). Before committing, check symmetry (every enforcement path), hostile inputs, mirror ops (import↔export, create↔delete), crash/replay, literal-vs-intent, and a violating test per security/data invariant. `/selfreview` walks it against the diff.
-
-Repos with a `.invariants.json` also get a `PreToolUse` gate (`invariant_gate.py`) running `invariant-lint.mjs` on push/PR that **blocks** HARD findings (interpolated SQL, committed creds, off-allowlist egress). Scaffold with `/invariants-init`; bypass with `SKIP_INVARIANT_GATE=1 <cmd>`.
+Full checklist: `rules/generation-doctrine.md` (always loaded). Repos with `.invariants.json` also get `invariant_gate.py` running `invariant-lint.mjs` on push/PR — blocks HARD findings (interpolated SQL, committed creds, off-allowlist egress). Scaffold with `/invariants-init`. Bypass: `SKIP_INVARIANT_GATE=1`.
 
 ## UX Doctrine (Enforced)
 
@@ -52,7 +51,7 @@ When to offer `/autoresearch` vs hand-tuning a metric: `rules/autoresearch-sugge
 ## Sub-agent Preamble
 
 Include in every Task/Agent prompt:
-> AUTO-ACCEPT MODE. Write files directly. No permission prompts. No AI attribution. Before `gh pr create` / `git push`: delegate to BOTH `codex-reviewer` (stamps `.git/codex-review-ok`) and `security-reviewer` (stamps `.git/security-review-ok`); both markers must be fresh. Inline `codex review` only as fallback inside an already-spawned agent, piped through `tail -200` + tempfile. Run rules/generation-doctrine.md self-review pre-commit and `node scripts/invariant-lint.mjs` where `.invariants.json` exists.
+> AUTO-ACCEPT MODE. Write files directly. No permission prompts. No AI attribution. Before `gh pr create` / `git push`: delegate to BOTH `codex-reviewer` (`.git/codex-review-ok`) and `security-reviewer` (`.git/security-review-ok`); both markers fresh. Inline `codex review` only as fallback inside a spawned agent, piped through `tail -200` + tempfile. Public prose (`gh` write ops on issues/pulls/comments, `git commit` with a body) MUST go through the `pr-comment-writer` sub-agent. Run rules/generation-doctrine.md pre-commit + `node scripts/invariant-lint.mjs` where `.invariants.json` exists.
 
 ## User Info
 

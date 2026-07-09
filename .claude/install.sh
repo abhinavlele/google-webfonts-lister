@@ -10,6 +10,12 @@ echo "Installing Claude Code configuration from $DOTFILES_DIR"
 
 # Ensure ~/.claude directory exists
 mkdir -p "$CLAUDE_DIR"
+# State dir for hook markers (e.g. pr_writer_gate.py's pr-writer.active).
+# Not linked from dotfiles — it holds ephemeral, per-user runtime state.
+# 0700 so a shared-host user cannot read or touch the freshness marker
+# and quietly enable / disable the PR-writer gate for us.
+mkdir -p "$CLAUDE_DIR/state"
+chmod 700 "$CLAUDE_DIR/state"
 
 # Backup existing settings.json if it exists and is not a symlink
 if [[ -f "$CLAUDE_DIR/settings.json" && ! -L "$CLAUDE_DIR/settings.json" ]]; then

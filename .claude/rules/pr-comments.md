@@ -72,3 +72,12 @@ When in doubt about whether a phrase sounds AI-generated, cut it. Read the
 draft out loud — if it sounds like a service-desk email or a chatbot, it
 probably is. Human reviewers write short, specific, imperfect prose, with
 occasional sentence fragments. Mirror that.
+
+## Markdown output — no horizontal rules
+
+Never insert `---` (Markdown horizontal rules) between sections of a PR
+description, comment, review body, or any generated report. Use headings
+(`##`, `###`) to separate sections. `---` renders as visual clutter and
+does not translate cleanly when the body is pasted into Google Docs,
+Confluence, or Slack. The one place `---` is required is the frontmatter
+fence at the top of the file itself (`---\nname: ...\n---`).
