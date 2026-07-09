@@ -3,6 +3,7 @@
     "Bash(git worktree *)",
     "Bash(git add *)",
     "Bash(git commit *)",
+    "Bash(git -c commit.gpgSign=true commit *)",
     "Bash(git fetch *)",
     "Bash(git push *)",
     "Bash(git pull *)",

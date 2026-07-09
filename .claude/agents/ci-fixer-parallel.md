@@ -119,11 +119,11 @@ git worktree add ../${REPO_NAME}-pr-789 origin/pr-789-branch
 # Run fixes in parallel across worktrees (separate terminals/processes)
 # Worktree 1:
 cd ../${REPO_NAME}-pr-123
-bundle exec rubocop -a && git add -A && git commit -m "Fix rubocop offenses" && git push
+bundle exec rubocop -a && git add -A && git -c commit.gpgSign=true commit -m "Fix rubocop offenses" && git push
 
 # Worktree 2 (simultaneously):
 cd ../${REPO_NAME}-pr-456
-npm run lint:fix && git add -A && git commit -m "Fix lint errors" && git push
+npm run lint:fix && git add -A && git -c commit.gpgSign=true commit -m "Fix lint errors" && git push
 
 # Worktree 3 (simultaneously):
 cd ../${REPO_NAME}-pr-789

@@ -239,7 +239,7 @@ _Changelog: reports/cumulative/status-changelog.md_
 ```bash
 cd ../poc-nats-reports
 git add reports/cumulative/status-changelog.md
-git commit -m "Status changes: $(date +%Y-%m-%d) ${HOURS}h window"
+git -c commit.gpgSign=true commit -m "Status changes: $(date +%Y-%m-%d) ${HOURS}h window"
 git push -u origin $(git branch --show-current)
 gh pr create --base poc --title "Status changes: $(date +%Y-%m-%d) ${HOURS}h window" --body "$(cat <<'EOF'
 ## Summary
