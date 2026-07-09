@@ -143,6 +143,10 @@
         "hooks": [
           {
             "type": "command",
+            "command": "~/.claude/hooks/wrappers/pr_writer_gate.sh"
+          },
+          {
+            "type": "command",
             "command": "~/.claude/hooks/wrappers/codex_review_gate.sh"
           },
           {
