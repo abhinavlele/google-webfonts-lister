@@ -206,7 +206,7 @@ In the worktree:
 ```bash
 cd ../poc-nats-deep-dive
 git add reports/
-git commit -m "Reports: Deep dive - full history analysis"
+git -c commit.gpgSign=true commit -m "Reports: Deep dive - full history analysis"
 git push -u origin <branch-name>
 gh pr create --base poc --title "Reports: Deep dive analysis of all merged PRs" --body "$(cat <<'EOF'
 ## Summary

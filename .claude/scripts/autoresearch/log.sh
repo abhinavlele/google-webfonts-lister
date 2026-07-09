@@ -36,11 +36,26 @@ confidence_py="$script_dir/confidence.py"
 [[ -f "$confidence_py" ]] || confidence_py="$HOME/.claude/scripts/autoresearch/confidence.py"
 confidence_json="$(python3 "$confidence_py" --jsonl "$jsonl" --iter "$iter" 2>/dev/null || echo '{}')"
 
+_git_commit() {
+  if [[ "${SKIP_COMMIT_SIGNING:-}" == "1" ]]; then
+    git -c commit.gpgSign=false commit "$@"
+  else
+    git -c commit.gpgSign=true commit "$@"
+    local sig
+    sig=$(git log -1 --pretty='%G?')
+    if [[ "$sig" != "G" && "$sig" != "U" ]]; then
+      git commit --amend --no-edit -S >/dev/null 2>&1 || true
+      sig=$(git log -1 --pretty='%G?')
+      [[ "$sig" == "G" || "$sig" == "U" ]] || die "cannot sign commit — check user.signingkey, gpg.format, and gpg-agent"
+    fi
+  fi
+}
+
 if [[ "$decision" == "keep" ]]; then
   git add -A
   if git diff --cached --quiet; then
     msg="autoresearch[iter $iter]: $name — no-op (nothing changed)"
-    git commit --allow-empty -m "$msg" >/dev/null
+    _git_commit --allow-empty -m "$msg" >/dev/null
   else
     summary="$(printf '%s' "$confidence_json" | python3 -c 'import sys,json;
 try: d=json.loads(sys.stdin.read())
@@ -53,7 +68,7 @@ print(" ".join(parts))')"
     msg="autoresearch[iter $iter]: $name — kept ($metric $unit $summary)"
     [[ -n "$note" ]] && msg="$msg
 $note"
-    git commit -m "$msg" >/dev/null
+    _git_commit -m "$msg" >/dev/null
   fi
   printf 'autoresearch[log]: kept iter %s (%s)\n' "$iter" "$summary"
 else

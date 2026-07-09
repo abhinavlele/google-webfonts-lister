@@ -489,7 +489,7 @@ In the worktree (all commands run with `-C` or from the worktree path):
 ```bash
 cd ../poc-nats-reports
 git add reports/
-git commit -m "Reports: PR #<numbers> batch update"
+git -c commit.gpgSign=true commit -m "Reports: PR #<numbers> batch update"
 git push -u origin <branch-name>
 gh pr create --base poc --title "Reports: PR #<numbers> batch" --body "$(cat <<'EOF'
 ## Summary
@@ -572,7 +572,7 @@ If `mergeable` is `CONFLICTING` or the push/PR creation failed:
    Then commit and force-push:
    ```bash
    git add reports/
-   git commit -m "Reports: PR #<numbers> batch update (rebased)"
+   git -c commit.gpgSign=true commit -m "Reports: PR #<numbers> batch update (rebased)"
    git push --force-with-lease
    ```
 
