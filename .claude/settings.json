@@ -116,7 +116,7 @@
       "WebFetch(domain:www.csoonline.com)",
       "WebFetch(domain:medium.com)",
       "WebFetch(domain:github.com)",
-      "Bash(~/.claude/plugins/cache/lele-dotfiles/claude-toolkit/*)"
+      "Bash(~/.claude/plugins/cache/lele-dotfiles/abhinav-lele-claude-code-toolkit/*)"
     ]
   },
   "statusLine": {
@@ -132,7 +132,7 @@
     }
   },
   "enabledPlugins": {
-    "claude-toolkit@lele-dotfiles": true,
+    "abhinav-lele-claude-code-toolkit@lele-dotfiles": true,
     "ruby-lsp@claude-plugins-official": true,
     "security-guidance@claude-plugins-official": true
   }
