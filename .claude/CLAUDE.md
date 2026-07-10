@@ -23,7 +23,7 @@
 ## Review Gates (Enforced)
 
 Two `PreToolUse` hooks block `gh pr create` / `git push` (non-default branch) until BOTH markers are fresh for HEAD:
-- `codex_review_gate.py` → `.git/codex-review-ok`. Spawn `codex-reviewer` (review→fix→commit→≤5 rounds→stamp). Codex via `~/.claude/scripts/codex-isolated.sh`. Bypass: `SKIP_CODEX_REVIEW=1`.
+- `codex_review_gate.py` → `.git/codex-review-ok`. Spawn `codex-reviewer` (review→fix→commit→≤5 rounds→stamp). Codex via the toolkit plugin's `codex-isolated.sh`. Bypass: `SKIP_CODEX_REVIEW=1`.
 - `security_review_gate.py` → `.git/security-review-ok`. Spawn `security-reviewer` — loads `.invariants.json` + design docs + deployment context. Bypass: `SKIP_SECURITY_REVIEW=1`.
 
 Markers are HEAD-pinned. Why two gates: memory `feedback_codex_alone_missed_jmaredia_findings.md`, `feedback_two_review_gates_drift.md`.

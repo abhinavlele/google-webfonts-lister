@@ -1,15 +1,22 @@
 {
   "allowedTools": [
-    "Bash(git *)",
-    "Bash(terraform init *)",
-    "Bash(terraform validate *)",
-    "Bash(terraform plan *)",
-    "Bash(terraform fmt *)",
-    "Bash(terraform output *)",
-    "Bash(terraform show *)",
-    "Bash(terraform state list *)",
-    "Bash(terraform state show *)",
-    "Bash(terraform providers *)",
+    "Bash(git worktree *)",
+    "Bash(git add *)",
+    "Bash(git commit *)",
+    "Bash(git -c commit.gpgSign=true commit *)",
+    "Bash(git fetch *)",
+    "Bash(git push *)",
+    "Bash(git pull *)",
+    "Bash(git log *)",
+    "Bash(git diff *)",
+    "Bash(git status *)",
+    "Bash(git branch *)",
+    "Bash(git remote *)",
+    "Bash(git stash *)",
+    "Bash(git checkout *)",
+    "Bash(git show *)",
+    "Bash(git rebase *)",
+    "Bash(terraform *)",
     "Bash(sleep *)",
     "Bash(cat *)",
     "Bash(head *)",
@@ -39,6 +46,7 @@
     "Bash(diff *)",
     "Bash(touch *)",
     "Bash(tee *)",
+    "Bash(xargs *)",
     "Bash(bundle *)",
     "Bash(npm *)",
     "Bash(npx *)",
@@ -51,12 +59,7 @@
     "Bash(sed *)",
     "Bash(awk *)",
     "Bash(tr *)",
-    "Bash(cut *)",
-    "Bash(~/.claude/scripts/autoresearch/init.sh *)",
-    "Bash(~/.claude/scripts/autoresearch/run.sh *)",
-    "Bash(~/.claude/scripts/autoresearch/log.sh *)",
-    "Bash(~/.claude/scripts/autoresearch/status.sh)",
-    "Bash(python3 ~/.claude/scripts/autoresearch/confidence.py *)"
+    "Bash(cut *)"
   ],
   "permissions": {
     "allow": [
@@ -78,6 +81,7 @@
       "Bash(gh run view*)",
       "Bash(gh run list*)",
       "Bash(gh search*)",
+      "Bash(codex review*)",
       "WebFetch(domain:thehackernews.com)",
       "WebFetch(domain:www.thehackernews.com)",
       "WebFetch(domain:bleepingcomputer.com)",
@@ -111,128 +115,25 @@
       "WebFetch(domain:csoonline.com)",
       "WebFetch(domain:www.csoonline.com)",
       "WebFetch(domain:medium.com)",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "Bash(~/.claude/plugins/cache/lele-dotfiles/claude-toolkit/*)"
     ]
   },
   "statusLine": {
     "type": "command",
-    "command": "bash ~/.claude/scripts/statusline-command.sh"
+    "command": "bash ~/.claude/statusline-command.sh"
+  },
+  "extraKnownMarketplaces": {
+    "lele-dotfiles": {
+      "source": {
+        "source": "github",
+        "repo": "leleabhinav/dotfiles"
+      }
+    }
   },
   "enabledPlugins": {
+    "claude-toolkit@lele-dotfiles": true,
     "ruby-lsp@claude-plugins-official": true,
     "security-guidance@claude-plugins-official": true
-  },
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/hooks/wrappers/codex_review_gate.sh"
-          },
-          {
-            "type": "command",
-            "command": "~/.claude/hooks/wrappers/security_review_gate.sh"
-          },
-          {
-            "type": "command",
-            "command": "~/.claude/hooks/wrappers/invariant_gate.sh"
-          },
-          {
-            "type": "command",
-            "command": "~/.claude/hooks/wrappers/budget_gate.sh"
-          },
-          {
-            "type": "command",
-            "command": "~/.claude/hooks/wrappers/running_blind_guard.sh"
-          },
-          {
-            "type": "command",
-            "command": "~/.claude/hooks/wrappers/ci_gate.sh"
-          }
-        ]
-      }
-    ],
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/hooks/wrappers/session_start.sh"
-          }
-        ]
-      }
-    ],
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/hooks/wrappers/user_prompt_submit.sh"
-          }
-        ]
-      }
-    ],
-    "PermissionRequest": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/hooks/wrappers/permission_request.sh"
-          }
-        ]
-      }
-    ],
-    "Notification": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/hooks/wrappers/notification.sh"
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/hooks/wrappers/stop.sh"
-          }
-        ]
-      }
-    ],
-    "SubagentStop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/hooks/wrappers/subagent_stop.sh"
-          }
-        ]
-      }
-    ],
-    "PreCompact": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/hooks/wrappers/pre_compact.sh"
-          }
-        ]
-      }
-    ],
-    "SessionEnd": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/hooks/wrappers/session_end.sh"
-          }
-        ]
-      }
-    ]
   }
 }
