@@ -7,7 +7,7 @@ over intent, happy-path only, and tests that confirm behavior instead of
 attacking invariants.
 
 The deterministic complement is `invariant-lint.mjs`, shipped in the
-claude-toolkit plugin's `scripts/`
+abhinav-lele-claude-code-toolkit plugin's `scripts/`
 (opt-in per repo via `.invariants.json`; scaffold with `/invariants-init`).
 A repo declares its invariants by composing rule-packs from the catalog —
 `.invariants.json` `"extends": ["typescript", "cloudflare-workers", ...]`
