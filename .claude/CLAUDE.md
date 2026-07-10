@@ -30,7 +30,7 @@ Markers are HEAD-pinned. Why two gates: memory `feedback_codex_alone_missed_jmar
 
 ## PR Writer Gate (Enforced)
 
-`pr_writer_gate.py` blocks every path that emits public prose — `gh pr comment/create/edit/review`, `gh issue comment/create/edit`, `gh release create/edit`, `gh api` with non-GET method against issues/pulls/comments/releases, and `git commit` with a body (`-F`, `--file=`, `--amend`, two `-m`, or bare `git commit` → editor). Subject-only `git commit -m "subject"` and read-only `gh` (view/list/diff/checks/status/api GET) stay allowed. Only the `pr-comment-writer` sub-agent may pass: it touches `~/.claude/state/pr-writer.active` (mtime < 5min) as its first action. Bypass: `SKIP_PR_WRITER_GATE=1 <cmd>`.
+`pr_writer_gate.py` blocks every path that emits public prose — `gh pr comment/create/edit/review`, `gh issue comment/create/edit`, `gh release create/edit`, `gh api` with non-GET method against issues/pulls/comments/releases, and `git commit` with a body (`-F`, `--file=`, `--amend`, two `-m`, or bare `git commit` → editor). Subject-only `git commit -m "subject"` and read-only `gh` (view/list/diff/checks/status/api GET) stay allowed. Only the `pr-comment-writer` sub-agent may pass: the gate authenticates it by `agent_type` in the payload (no marker touch). Bypass: `SKIP_PR_WRITER_GATE=1 <cmd>`.
 
 ## CI Gate (Enforced)
 
