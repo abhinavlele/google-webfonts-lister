@@ -6,11 +6,12 @@ blindness (a guard added to one code path but not its mirror), literal-spec
 over intent, happy-path only, and tests that confirm behavior instead of
 attacking invariants.
 
-The deterministic complement is `~/.claude/scripts/invariant-lint.mjs`
+The deterministic complement is `invariant-lint.mjs`, shipped in the
+claude-toolkit plugin's `scripts/`
 (opt-in per repo via `.invariants.json`; scaffold with `/invariants-init`).
 A repo declares its invariants by composing rule-packs from the catalog —
 `.invariants.json` `"extends": ["typescript", "cloudflare-workers", ...]`
-(see `~/.claude/invariants/README.md`) — plus parameters (`egressAllowlist`,
+(see the plugin's `invariants/README.md`) — plus parameters (`egressAllowlist`,
 `requireTestWithSrc`) and repo-local `rules`. `/invariants-init` detects the
 stack, composes `extends`, and vendors the linter + resolved packs so CI is
 self-contained. Run `/selfreview` before committing.

@@ -2,7 +2,7 @@
 
 Standing doctrine for every change that touches a user interface, in every
 repo. The deterministic complement is the `a11y` and `design-system`
-rule-packs (`~/.claude/invariants/packs/`, opt in via `.invariants.json`
+rule-packs (claude-toolkit plugin `invariants/packs/`, opt in via `.invariants.json`
 `"extends"`) — they catch the *mechanical* failures: a hrefless anchor, a
 hardcoded hex, a positive tabindex. This file covers the half a regex cannot
 see: missing states, weak copy, broken focus order, inconsistent layout.
