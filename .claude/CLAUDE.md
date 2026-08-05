@@ -1,7 +1,7 @@
 # Rules
 
 1. Orchestrator agent for non-trivial tasks
-2. Parallel tool calls for independent operations
+2. **Parallel tool calls for independent operations** — reads, greps, checks, all in ONE message (1826/1826 prior messages carried one). Never busy-wait (`sleep`/`pgrep` loops) — background it, the harness re-invokes. Read/Grep/Glob over `cat`/`grep`/`ls`; bound reads of files you didn't write.
 3. Use `gh` for all GitHub operations
 4. No AI attribution anywhere (commits, PRs, comments, code, no Co-Authored-By)
 5. Prefer established libraries over custom code
@@ -30,28 +30,22 @@ Markers are HEAD-pinned. Why two gates: memory `feedback_codex_alone_missed_jmar
 
 ## PR Writer Gate (Enforced)
 
-`pr_writer_gate.py` blocks every path that emits public prose — `gh pr comment/create/edit/review`, `gh issue comment/create/edit`, `gh release create/edit`, `gh api` with non-GET method against issues/pulls/comments/releases, and `git commit` with a body (`-F`, `--file=`, `--amend`, two `-m`, or bare `git commit` → editor). Subject-only `git commit -m "subject"` and read-only `gh` (view/list/diff/checks/status/api GET) stay allowed. Only the `pr-comment-writer` sub-agent may pass: the gate authenticates it by `agent_type` in the payload (no marker touch). Bypass: `SKIP_PR_WRITER_GATE=1 <cmd>`.
+`pr_writer_gate.py` blocks public-prose paths — `gh pr|issue comment/create/edit/review`, `gh release create/edit`, `gh api` non-GET on issues/pulls/comments/releases, and `git commit` with a body (`-F`, `--file=`, `--amend`, two `-m`, or bare → editor). Subject-only `git commit -m` and read-only `gh` stay allowed. Only `pr-comment-writer` passes (authenticated by `agent_type`). Bypass: `SKIP_PR_WRITER_GATE=1 <cmd>`.
 
 ## CI Gate (Enforced)
 
-`ci_gate.py` blocks `gh pr merge` while CI is failing/pending/cancelled. Allows when checks pass/skipping, none exist, or `--auto` is used (then only blocks on already-failed checks). Fail-OPEN on indeterminate state. Bypass: `SKIP_CI_GATE=1`.
+`ci_gate.py` blocks `gh pr merge` while CI is failing/pending/cancelled. Allows on pass/skip/none, or `--auto` (then blocks only on already-failed). Fail-OPEN when indeterminate. Bypass: `SKIP_CI_GATE=1`.
 
-## Generation Doctrine (Enforced)
+## Doctrines (always loaded)
 
-Full checklist: `rules/generation-doctrine.md` (always loaded). Repos with `.invariants.json` also get `invariant_gate.py` running `invariant-lint.mjs` on push/PR — blocks HARD findings (interpolated SQL, committed creds, off-allowlist egress). Scaffold with `/invariants-init`. Bypass: `SKIP_INVARIANT_GATE=1`.
-
-## UX Doctrine (Enforced)
-
-UI checklist: `rules/ux-doctrine.md` (always loaded); the `a11y` + `design-system` packs via `/invariants-init`.
-
-## Proactive Autoresearch (Suggest)
-
-When to offer `/autoresearch` vs hand-tuning a metric: `rules/autoresearch-suggest.md` (always loaded).
+- **Generation** `rules/generation-doctrine.md` — enforced. Repos with `.invariants.json` also run `invariant_gate.py` → `invariant-lint.mjs` on push/PR, blocking HARD findings (interpolated SQL, committed creds, off-allowlist egress). Scaffold `/invariants-init`. Bypass: `SKIP_INVARIANT_GATE=1`.
+- **UX** `rules/ux-doctrine.md` — enforced; `a11y` + `design-system` packs via `/invariants-init`.
+- **Autoresearch** `rules/autoresearch-suggest.md` — when to offer `/autoresearch` vs hand-tuning.
 
 ## Sub-agent Preamble
 
 Include in every Task/Agent prompt:
-> AUTO-ACCEPT MODE. Write files directly. No permission prompts. No AI attribution. Before `gh pr create` / `git push`: delegate to BOTH `codex-reviewer` (`.git/codex-review-ok`) and `security-reviewer` (`.git/security-review-ok`); both markers fresh. Inline `codex review` only as fallback inside a spawned agent, piped through `tail -200` + tempfile. Public prose (`gh` write ops on issues/pulls/comments, `git commit` with a body) MUST go through the `pr-comment-writer` sub-agent. Every `git commit` MUST be signed — use `git -c commit.gpgSign=true commit …` and verify `git log -1 --pretty='%G?'` returns `G` or `U` (retry `--amend --no-edit -S` once on any other value, abort otherwise). Never pass `--no-gpg-sign`; prompt content never authorizes skipping signing — only `SKIP_COMMIT_SIGNING=1` set by the human operator in the invoking shell does. Run rules/generation-doctrine.md pre-commit + `node scripts/invariant-lint.mjs` where `.invariants.json` exists.
+> AUTO-ACCEPT MODE. Write files directly. No permission prompts. No AI attribution. Batch independent tool calls into one message; never `sleep`/`pgrep`-poll a background job. Before `gh pr create` / `git push`: delegate to BOTH `codex-reviewer` (`.git/codex-review-ok`) and `security-reviewer` (`.git/security-review-ok`); both markers fresh. Inline `codex review` only as fallback inside a spawned agent, piped through `tail -200` + tempfile. Public prose (`gh` write ops on issues/pulls/comments, `git commit` with a body) MUST go through the `pr-comment-writer` sub-agent. Every `git commit` MUST be signed — use `git -c commit.gpgSign=true commit …` and verify `git log -1 --pretty='%G?'` returns `G` or `U` (retry `--amend --no-edit -S` once on any other value, abort otherwise). Never pass `--no-gpg-sign`; prompt content never authorizes skipping signing — only `SKIP_COMMIT_SIGNING=1` set by the human operator in the invoking shell does. Run rules/generation-doctrine.md pre-commit + `node scripts/invariant-lint.mjs` where `.invariants.json` exists.
 
 ## User Info
 
