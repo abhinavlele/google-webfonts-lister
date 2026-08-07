@@ -46,3 +46,25 @@ fall back to `gtimeout`. Don't enforce timeouts by counting your own sleeps.
 
 This is the single largest measured time sink: **201 polling-style calls, 168.6
 minutes, 55% of all Bash wall-clock.**
+
+## A process check must never match its own argv
+
+`pgrep -f <pattern>` matches the FULL command line, and the Bash tool wraps
+what you run in `sh -c '<the whole string>'` — so the pattern is sitting in the
+watcher's own argv. `until ! pgrep -f 'codex-isolated.sh review'; do sleep 20;
+done` therefore matches itself and waits forever. This is not hypothetical: it
+wedged a review for 12.5 hours before a human noticed (#137).
+
+In order of preference:
+
+1. Don't wait at all — background the job and let re-invocation-on-exit handle
+   it. This removes the check rather than fixing it.
+2. If a liveness check is genuinely needed, identify the process by `$!` (the
+   shell's own last-background-PID) or a pidfile — never by pattern.
+3. If a pattern is unavoidable, it must be a string that provably cannot appear
+   in the watcher's own command line, and the check must explicitly exclude
+   `$$`. The same trap is why `ps | grep` idioms carry `grep -v grep`; treat
+   that as evidence the shape is wrong, not as the fix.
+
+Same rule for a script that inspects `ps` output: snapshot first, match the
+pattern afterwards, so the searching process cannot be in what was captured.
