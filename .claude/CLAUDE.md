@@ -1,7 +1,7 @@
 # Rules
 
 1. Orchestrator agent for non-trivial tasks
-2. **Parallel tool calls for independent operations** — reads, greps, checks, all in ONE message (1826/1826 prior messages carried one). Never busy-wait (`sleep`/`pgrep` loops) — background it, the harness re-invokes. Read/Grep/Glob over `cat`/`grep`/`ls`; bound reads of files you didn't write.
+2. **Parallel tool calls for independent operations** — reads, greps, checks, all in ONE message. Never busy-wait (`sleep`/`pgrep` loops) — background it, the harness re-invokes. Read/Grep/Glob over `cat`/`grep`/`ls`; bound reads of files you didn't write.
 3. Use `gh` for all GitHub operations
 4. No AI attribution anywhere (commits, PRs, comments, code, no Co-Authored-By)
 5. Prefer established libraries over custom code
@@ -17,20 +17,20 @@
 15. Checkpoint verification after each phase of multi-step work
 16. Surface assumptions explicitly — ask "What if this is wrong?"
 17. Git worktrees only, never `git checkout` for branch switching
-18. Two-reviewer gate before any PR create or push: delegate to BOTH `codex-reviewer` (local correctness) and `security-reviewer` (project-aware threat-model) sub-agents. Independent markers `codex-review-ok` + `security-review-ok`, both must be fresh for HEAD. Never run `codex review` inline. Never hardcode `main`.
-19. **CRITICAL — No LLM tells in PR comments / commits / descriptions. Keep them short.** Checklist: `rules/pr-comments.md`. **ENFORCED** by `pr_writer_gate.py` — see "PR Writer Gate" below.
+18. Two-reviewer gate — see "Review Gates". Never run `codex review` inline. Never hardcode `main`.
+19. **CRITICAL — No LLM tells in PR comments / commits / descriptions. Keep them short.** Checklist: `rules/pr-comments.md`. **ENFORCED** — see "PR Writer Gate".
 
 ## Review Gates (Enforced)
 
-Two `PreToolUse` hooks block `gh pr create` / `git push` (non-default branch) until BOTH markers are fresh for HEAD:
-- `codex_review_gate.py` → `.git/codex-review-ok`. Spawn `codex-reviewer` (review→fix→commit→≤5 rounds→stamp). Codex via the toolkit plugin's `codex-isolated.sh`. Bypass: `SKIP_CODEX_REVIEW=1`.
+Two `PreToolUse` hooks block `gh pr create` / `git push` (non-default branch) until BOTH markers are fresh for HEAD. Spawn both gate agents in separate worktrees — parallel, not serial (sharing one, each fix commit stales the other's marker). Reconcile fix commits, then one joint re-verify pass stamping both markers in the target worktree at final HEAD; stamps elsewhere don't carry over. Serialize only for trivial fixes.
+- `codex_review_gate.py` → `.git/codex-review-ok`. Spawn `codex-reviewer` via `codex-isolated.sh`. Bypass: `SKIP_CODEX_REVIEW=1`.
 - `security_review_gate.py` → `.git/security-review-ok`. Spawn `security-reviewer` — loads `.invariants.json` + design docs + deployment context. Bypass: `SKIP_SECURITY_REVIEW=1`.
 
-Markers are HEAD-pinned. Why two gates: memory `feedback_codex_alone_missed_jmaredia_findings.md`, `feedback_two_review_gates_drift.md`.
+Why two gates: memory `feedback_codex_alone_missed_jmaredia_findings.md`, `feedback_two_review_gates_drift.md`.
 
 ## PR Writer Gate (Enforced)
 
-`pr_writer_gate.py` blocks public-prose paths — `gh pr|issue comment/create/edit/review`, `gh release create/edit`, `gh api` non-GET on issues/pulls/comments/releases, and `git commit` with a body (`-F`, `--file=`, `--amend`, two `-m`, or bare → editor). Subject-only `git commit -m` and read-only `gh` stay allowed. Only `pr-comment-writer` passes (authenticated by `agent_type`). Bypass: `SKIP_PR_WRITER_GATE=1 <cmd>`.
+`pr_writer_gate.py` blocks public-prose paths — `gh pr|issue comment/create/edit/review`, `gh release create/edit`, `gh api` non-GET on issues/pulls/comments/releases, and `git commit` with a body (`-F`, `--file=`, `--amend`, two `-m`, or bare → editor). Subject-only `git commit -m` and read-only `gh` stay allowed. Only `pr-comment-writer` passes (via `agent_type`). Bypass: `SKIP_PR_WRITER_GATE=1`.
 
 ## CI Gate (Enforced)
 
@@ -41,6 +41,7 @@ Markers are HEAD-pinned. Why two gates: memory `feedback_codex_alone_missed_jmar
 - **Generation** `rules/generation-doctrine.md` — enforced. Repos with `.invariants.json` also run `invariant_gate.py` → `invariant-lint.mjs` on push/PR, blocking HARD findings (interpolated SQL, committed creds, off-allowlist egress). Scaffold `/invariants-init`. Bypass: `SKIP_INVARIANT_GATE=1`.
 - **UX** `rules/ux-doctrine.md` — enforced; `a11y` + `design-system` packs via `/invariants-init`.
 - **Autoresearch** `rules/autoresearch-suggest.md` — when to offer `/autoresearch` vs hand-tuning.
+- **Review scope discipline** `rules/review-scope-discipline.md` — fix in-scope inline, file the rest.
 
 ## Sub-agent Preamble
 
