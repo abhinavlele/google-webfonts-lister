@@ -59,6 +59,16 @@ audit widely, then file (don't fix) whatever the classification above
 puts out of scope. This rule closes the second failure without reopening
 the first.
 
+## Priority triage within scope
+
+In-scope findings still get a priority check before fixing: **likelihood**
+(normal operation vs. a rare multi-condition coincidence) × **risk** (data
+loss, security bypass vs. cosmetic/self-correcting). HIGH — fix inline,
+same round. LOW — defer like an out-of-scope finding (`deferred:` in the
+status line); don't let it block round-cap convergence. This caps a loop
+that keeps surfacing real-but-vanishingly-unlikely edge cases in its own
+mechanism — each defensible alone, unbounded together.
+
 ## What filing looks like
 
 Review-gate agents don't carry `gh issue create` in their tool allowlist,
