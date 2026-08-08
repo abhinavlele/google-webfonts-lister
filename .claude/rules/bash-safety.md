@@ -47,6 +47,13 @@ fall back to `gtimeout`. Don't enforce timeouts by counting your own sleeps.
 This is the single largest measured time sink: **201 polling-style calls, 168.6
 minutes, 55% of all Bash wall-clock.**
 
+One narrow exception: a **single backgrounded wakeup timer**, launched once
+alongside the work it is timing, as a fallback for a re-invocation that never
+arrives (#153). It is not busy-waiting — it adds no wall-clock the job was not
+already going to take, and it produces at most one wake. A foreground `sleep`,
+a loop of any kind, or relaunching/extending the timer within the same unit of
+work IS busy-waiting and stays forbidden.
+
 ## A process check must never match its own argv
 
 `pgrep -f <pattern>` matches the FULL command line, and the Bash tool wraps
