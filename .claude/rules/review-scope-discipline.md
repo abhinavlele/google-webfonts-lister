@@ -10,8 +10,8 @@ not installing on a fresh bootstrap) grew to ~680 lines and 15 commits
 chasing tmux XDG config precedence, `/etc/tmux.conf` source-file
 indirection, a legacy plugin-declaration option, branch-suffixed plugin
 specs, and CI path-filter changes — none of which the original request
-needed to be correct, and none of which a personal single-user dotfiles
-bootstrap script materially benefits from defending against.
+needed to be correct, and none of which a single-user dotfiles bootstrap
+script materially benefits from defending against.
 
 ## The rule
 
@@ -64,22 +64,28 @@ the first.
 In-scope findings still get a priority check before fixing: **likelihood**
 (normal operation vs. a rare multi-condition coincidence) × **risk** (data
 loss, security bypass vs. cosmetic/self-correcting). HIGH — fix inline,
-same round. LOW — defer like an out-of-scope finding (`deferred:` in the
-status line); don't let it block round-cap convergence. This caps a loop
-that keeps surfacing real-but-vanishingly-unlikely edge cases in its own
-mechanism — each defensible alone, unbounded together.
+same round. LOW — defer like an out-of-scope finding (`deferred:
+(low-priority)` in the status line); don't let it block convergence.
+This caps a loop that keeps surfacing real-but-vanishingly-unlikely edge
+cases in its own mechanism — each defensible alone, unbounded together.
 
 ## What filing looks like
 
 Review-gate agents don't carry `gh issue create` in their tool allowlist,
-and it is separately gated by the PR Writer Gate besides — they are not
-positioned to open issues themselves. List out-of-scope findings by short
-title in the round's returned status line instead, e.g.:
+and the PR Writer Gate blocks it besides — they are not positioned to
+open issues themselves. List deferred findings by short title in the
+round's returned status line instead, each tagged with WHY it was
+deferred — `(out-of-scope)` or `(low-priority)`:
 
 ```
-clean: marker stamped at abc123; deferred: "validate /etc/tmux.conf
-plugin declarations", "handle legacy @tpm_plugins option"
+clean: marker stamped at abc123; deferred: (out-of-scope) "validate
+/etc/tmux.conf plugin declarations", (low-priority) "lock release races
+a mid-commit crash"
 ```
+
+The tag drives triage: `(low-priority)` is a real gap the diff
+introduces, just unlikely or low-harm — worth fixing eventually;
+`(out-of-scope)` was never needed for the change to be correct.
 
 Filing the actual issue (`gh issue create`, through `pr-comment-writer`)
 is the orchestrating agent's job, or the human operator's — whichever is

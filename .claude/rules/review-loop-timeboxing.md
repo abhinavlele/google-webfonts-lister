@@ -34,7 +34,10 @@ Whoever drives that loop tracks it:
 > LOW-priority `deferred:` findings (per the likelihood/risk triage) — no
 > invocation in between made a fix commit for a HIGH finding — stop
 > re-spawning. Adjudicate the deferred list yourself (fix or file), run
-> exactly one final verification invocation, then converge. An invocation
+> exactly one final verification invocation, then converge. If that
+> adjudication commits a fix of its own it stales BOTH markers, and one
+> invocation can no longer restore them — budget a full codex-reviewer →
+> security-reviewer pair at the new HEAD instead. An invocation
 > that still produced a HIGH-finding fix commit never counts toward this
 > streak, no matter how narrow that finding was — that's forward progress,
 > not a stall.
