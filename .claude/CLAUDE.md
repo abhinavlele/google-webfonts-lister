@@ -17,24 +17,12 @@
 15. Checkpoint verification after each phase of multi-step work
 16. Surface assumptions explicitly — ask "What if this is wrong?"
 17. Git worktrees only, never `git checkout` for branch switching
-18. Two-reviewer gate, sequential only (shared object store, #134); see "Review Gates". Never run `codex review` inline. Never hardcode `main`.
-19. **CRITICAL — No LLM tells in PR comments / commits / descriptions. Keep them short.** Checklist: `rules/pr-comments.md`. **ENFORCED** — see "PR Writer Gate".
+18. Two-reviewer gate, sequential only (shared object store, #134); see `rules/enforced-gates.md`. Never run `codex review` inline. Never hardcode `main`.
+19. **CRITICAL — No LLM tells in PR comments / commits / descriptions. Keep them short.** Checklist: `rules/pr-comments.md`. **ENFORCED** — see `rules/enforced-gates.md`.
 
-## Review Gates (Enforced)
+## Enforced Gates
 
-Two `PreToolUse` hooks block `gh pr create` / `git push` (non-default branch) until BOTH markers are fresh for the SAME HEAD. Same worktree, sequential only — `codex-reviewer` first, `security-reviewer` second. Never parallel: concurrent commits once raced `git gc --auto`, corrupting a branch (#134); set `gc.auto 0` in every worktree. A security fix commit stales codex's marker — reconverge (bounded retries, see `/ship`).
-- `codex_review_gate.py` → `.git/codex-review-ok`. Spawn `codex-reviewer` via `codex-isolated.sh`. Bypass: `SKIP_CODEX_REVIEW=1`.
-- `security_review_gate.py` → `.git/security-review-ok`. Spawn `security-reviewer` — loads `.invariants.json` + design docs + deployment context. Bypass: `SKIP_SECURITY_REVIEW=1`.
-
-Why two gates: memory `feedback_codex_alone_missed_jmaredia_findings.md`, `feedback_two_review_gates_drift.md`.
-
-## PR Writer Gate (Enforced)
-
-`pr_writer_gate.py` blocks public-prose paths — `gh pr|issue comment/create/edit/review`, `gh release create/edit`, `gh api` non-GET on issues/pulls/comments/releases, and `git commit` with a body (`-F`, `--file=`, `--amend`, two `-m`, or bare → editor). Subject-only `git commit -m` and read-only `gh` stay allowed. Only `pr-comment-writer` passes (via `agent_type`). Bypass: `SKIP_PR_WRITER_GATE=1`.
-
-## CI Gate (Enforced)
-
-`ci_gate.py` blocks `gh pr merge` while CI is failing/pending/cancelled. Allows on pass/skip/none, or `--auto` (then blocks only on already-failed). Fail-OPEN when indeterminate. Bypass: `SKIP_CI_GATE=1`.
+Review, PR-writer, and CI gates — hook-enforced `PreToolUse` checks on git/gh operations. Detail in `rules/enforced-gates.md`.
 
 ## Doctrines (always loaded)
 
