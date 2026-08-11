@@ -1,3 +1,9 @@
+---
+paths:
+  - "**/codex-reviewer.md"
+  - "**/security-reviewer.md"
+---
+
 # Review Scope Discipline — Fix What Was Asked, File the Rest
 
 Standing doctrine for `codex-reviewer`, `security-reviewer`, and any future
@@ -34,10 +40,9 @@ Classify every finding before acting on it:
 
 The test: **"does the ORIGINAL request fail, misbehave, or become unsafe
 without this fix?"** Yes → in scope. "No, but it would be more robust" →
-out of scope, and say so explicitly rather than quietly fixing it anyway,
-which is how scope creep hides — a finding fixed without comment looks
-identical to one that was load-bearing all along, and the next round has
-no way to tell them apart.
+out of scope, and say so explicitly rather than quietly fixing it anyway —
+a silently-fixed finding is indistinguishable from a load-bearing one,
+and that's exactly how scope creep hides.
 
 Apply that test to the DIFF, not to the feature's headline. Anything the
 change itself introduces — a new unbounded input, a secret or infra
@@ -84,11 +89,10 @@ a mid-commit crash"
 ```
 
 The tag drives triage: `(low-priority)` is a real gap the diff
-introduces, just unlikely or low-harm — worth fixing eventually;
-`(out-of-scope)` was never needed for the change to be correct.
+introduces, just unlikely or low-harm; `(out-of-scope)` was never needed
+for the change to be correct.
 
 Filing the actual issue (`gh issue create`, through `pr-comment-writer`)
-is the orchestrating agent's job, or the human operator's — whichever is
-driving. A deferred finding that's dropped on the floor because no one
-files it is a known, visible gap; a deferred finding silently fixed
-anyway is scope creep with a clean marker attached.
+is the orchestrating agent's or human operator's job. A deferred finding
+dropped on the floor is a known, visible gap; one silently fixed anyway
+is scope creep with a clean marker attached.
