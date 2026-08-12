@@ -1,5 +1,6 @@
 ---
 paths:
+  - "**/ship.md"
   - "**/codex-reviewer.md"
   - "**/security-reviewer.md"
 ---
@@ -13,11 +14,10 @@ hardening idea the diff's neighborhood suggests. Letting "keep finding
 things" and "keep fixing things" run as the same loop, with no exit other
 than exhausting the round cap, is how a one-function bug fix (tmux plugins
 not installing on a fresh bootstrap) grew to ~680 lines and 15 commits
-chasing tmux XDG config precedence, `/etc/tmux.conf` source-file
-indirection, a legacy plugin-declaration option, branch-suffixed plugin
-specs, and CI path-filter changes — none of which the original request
-needed to be correct, and none of which a single-user dotfiles bootstrap
-script materially benefits from defending against.
+chasing five unrelated hardening tangents (tmux XDG config precedence,
+`/etc/tmux.conf` indirection, a legacy plugin option, branch-suffixed
+specs, CI path filters) — none needed for the original request, none a
+single-user dotfiles script benefits from defending against.
 
 ## The rule
 
@@ -56,13 +56,11 @@ deferral at all. Every example in the incident above is that kind.
 ## Why this doesn't weaken the open-ended audit
 
 `security-reviewer`'s "Mandatory open-ended audit pass" stays exactly as
-it is: keep looking beyond only what the parent named, because
-targeted-only passes have missed real findings before (see that rule for
-the incident it exists to prevent). What changes is what happens AFTER
-something is found. Coverage and scope are different failure modes —
-audit widely, then file (don't fix) whatever the classification above
-puts out of scope. This rule closes the second failure without reopening
-the first.
+it is: keep looking beyond only what the parent named, since targeted-only
+passes have missed real findings before. What changes is what happens
+AFTER something is found — coverage and scope are different failure
+modes. Audit widely, then file (don't fix) whatever the classification
+above puts out of scope.
 
 ## Priority triage within scope
 
@@ -83,14 +81,16 @@ round's returned status line instead, each tagged with WHY it was
 deferred — `(out-of-scope)` or `(low-priority)`:
 
 ```
-clean: marker stamped at abc123; deferred: (out-of-scope) "validate
-/etc/tmux.conf plugin declarations", (low-priority) "lock release races
-a mid-commit crash"
+clean: marker stamped at abc123; deferred: (out-of-scope) "validate /etc/tmux.conf plugin declarations", (low-priority) "lock release races a mid-commit crash"
 ```
 
 The tag drives triage: `(low-priority)` is a real gap the diff
 introduces, just unlikely or low-harm; `(out-of-scope)` was never needed
 for the change to be correct.
+
+Past ~5 in the accumulated `deferred:` list — the running total across
+ALL rounds in the final status line, not any single round's own count —
+group by theme instead of listing each title (#159).
 
 Filing the actual issue (`gh issue create`, through `pr-comment-writer`)
 is the orchestrating agent's or human operator's job. A deferred finding
