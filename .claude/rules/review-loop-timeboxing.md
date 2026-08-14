@@ -30,10 +30,9 @@ Consecutive invocations are visible at the CALLER's re-spawn boundary:
 re-spawning whichever reviewer's marker went stale) is where this applies.
 Whoever drives that loop tracks it:
 
-> After 2 consecutive invocations whose returned status carries only
-> LOW-priority `deferred:` findings (per the likelihood/risk triage) — no
-> invocation in between made a fix commit for a HIGH finding — stop
-> re-spawning. Adjudicate the deferred list yourself (fix or file), run
+> After 2 consecutive invocations whose returned status carries nothing but
+> `deferred:` findings — no invocation in between made a fix commit for a
+> HIGH finding — stop re-spawning. Adjudicate the deferred list yourself (fix or file), run
 > exactly one final verification invocation, then converge. If that
 > adjudication commits a fix of its own it stales BOTH markers, and one
 > invocation can no longer restore them — budget a full codex-reviewer →
@@ -41,6 +40,15 @@ Whoever drives that loop tracks it:
 > that still produced a HIGH-finding fix commit never counts toward this
 > streak, no matter how narrow that finding was — that's forward progress,
 > not a stall.
+
+The deferral tag is triage metadata for what happens AFTER the loop, not a
+filter on the streak:
+`(low-priority)` and `(out-of-scope)` findings count toward it alike,
+in any mix. Both tags mean the reviewer decided not to fix it and not to let
+it block convergence (`review-scope-discipline.md`), so a round that deferred
+everything as out-of-scope is exactly as empty of forward progress as one
+that deferred everything as low-priority. The condition is the absence of a
+HIGH-finding fix commit, never the presence of a particular tag.
 
 Tighter than, and separate from, either sub-agent's own 5-round internal
 hard cap — that cap only prevents infinite looping inside one invocation,
