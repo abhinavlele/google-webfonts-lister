@@ -12,11 +12,17 @@ Write as if a human engineer typed it. Trust the diff to speak for itself.
 ## Length caps (hard)
 
 - **Commit message body: ≤ 3 sentences.** One paragraph. If the change
-  needs more explanation, it belongs in an ADR / design doc / PR body,
-  not the commit trailer. The subject line already summarizes; the body
-  is only for the *why* that isn't in the diff.
-- **PR / review comment: ≤ 3 sentences** unless a tradeoff needs
-  explaining, in which case a second paragraph is fine.
+  needs more explanation, it belongs in an ADR or design doc, not the
+  commit trailer. The subject line already summarizes; the body is only
+  for the *why* that isn't in the diff.
+- **PR description, review comment, or PR comment: ≤ 3 sentences total.**
+  One paragraph, unless a tradeoff or an actionable constraint the reader
+  must act on (a hard merge/deploy dependency, a required follow-up)
+  needs explaining — then a second short paragraph is fine, but the
+  3-sentence total still covers both. A PR description is not exempt
+  from this cap just because it's "the main writeup" — a dense,
+  multi-paragraph implementation summary is exactly the failure mode
+  this cap exists to prevent.
 - **Bulleted lists in commit bodies: don't.** Prose sentences read like
   human intent; a bullet enumeration of "what changed" reads like
   machine output and duplicates the diff.
@@ -40,6 +46,19 @@ STOP: pick the one thing that's not in the diff and cut the rest.
 - Restating what the diff already shows. A line-level commit speaks for
   itself; comment only when you have something the diff does NOT say
   (rationale, tradeoff considered, deferred follow-up with a reason).
+  This is about REACTING to a diff someone can already see (a review
+  reply, a commit trailer) — it does not ban the one-paragraph, high-level
+  "what and why" a PR description exists to give a reader who hasn't
+  opened the diff yet. Keep that summary to the cap above and to the
+  headline facts; don't turn it into a file-by-file or line-by-line
+  walk-through.
+- Referencing the same ticket twice in adjacent text — a named link whose
+  anchor is the human-readable title, followed by a bare `(PROJ-1234)`
+  restating the same id. Pick one form: link the key itself and leave the
+  name unlinked in parens, or name-link it and give the bare id once
+  elsewhere. Trackers that auto-linkify bare `PROJ-NNNN` text render the
+  pair as two links to one target — judge the rendered result, not the
+  Markdown source.
 - Multi-paragraph polished essays where 2 sentences would do.
 - Exhaustive bullet enumerations of what changed.
 
@@ -49,7 +68,7 @@ STOP: pick the one thing that's not in the diff and cut the rest.
 - Specific line refs (`file.go:123`) instead of "in the function I changed".
 - Lead with the substance, not preamble.
 - One paragraph if the reply is just an acknowledgement; two if there's a
-  tradeoff to explain.
+  tradeoff or an actionable constraint to explain.
 
 ## When to comment at all
 
