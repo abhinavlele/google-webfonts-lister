@@ -19,6 +19,7 @@
 17. Git worktrees only, never `git checkout` for branch switching
 18. Two-reviewer gate, sequential only (shared object store, #134); see `rules/enforced-gates.md`. Never run `codex review` inline. Never hardcode `main`.
 19. **CRITICAL — No LLM tells in PR comments / commits / descriptions. Keep them short.** Checklist: `rules/pr-comments.md`. **ENFORCED** — see `rules/enforced-gates.md`.
+20. **CRITICAL — Never post a PR/issue comment without approval.** Draft it, humanize it per rule 19, show the exact text in chat, then wait for an explicit go. Never post-then-report. When delegating a push, let the agent push but bring the comment draft back here for approval — never let it push and comment in the same call. This is the one place that overrides rule 7: for comments, ask.
 
 ## Enforced Gates
 
@@ -38,8 +39,8 @@ Include in every Task/Agent prompt:
 
 ## User Info
 
-- Atlassian: 712020:54c88bcc-581b-44d3-aa7b-7edfe8474318
-- Email: abhinav.lele@li.me
+- Atlassian: 712020:4e9abc87-b455-434e-91b4-f28b38439133
+- Email: abhinavl@cdata.com
 - Name: Abhinav Lele
 
 @memory.md
