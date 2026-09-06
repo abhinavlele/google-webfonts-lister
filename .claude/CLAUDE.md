@@ -23,7 +23,7 @@
 
 ## Enforced Gates
 
-Review, PR-writer, and CI gates — hook-enforced `PreToolUse` checks on git/gh operations. Detail in `rules/enforced-gates.md`.
+Review, PR-writer, codex-config-bypass, and CI gates — hook-enforced `PreToolUse` checks on git/gh/env operations. Detail in `rules/enforced-gates.md`.
 
 ## Doctrines (always loaded)
 
