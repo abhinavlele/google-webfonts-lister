@@ -129,11 +129,18 @@
         "source": "github",
         "repo": "leleabhinav/dotfiles"
       }
+    },
+    "notgabriels-themes": {
+      "source": {
+        "source": "github",
+        "repo": "notgabriels-sys/claude-code-50-dark-themes"
+      }
     }
   },
   "enabledPlugins": {
     "abhinav-lele-claude-code-toolkit@lele-dotfiles": true,
     "ruby-lsp@claude-plugins-official": true,
-    "security-guidance@claude-plugins-official": true
+    "security-guidance@claude-plugins-official": true,
+    "dark-themes-vol-2@notgabriels-themes": true
   }
 }
