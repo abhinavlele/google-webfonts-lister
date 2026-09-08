@@ -1,15 +1,14 @@
 # Generation Doctrine — Adversarial Self-Review
 
-Standing doctrine for every implementation pass, in every repo. The same
-failure classes recur and are only caught by external review: symmetry
-blindness, literal-spec over intent, happy-path only, tests that confirm
-behavior rather than attack invariants.
+Standing doctrine for every implementation pass. The same failure classes
+recur and are only caught by external review: symmetry blindness,
+literal-spec over intent, happy-path only, tests that confirm behavior
+rather than attack invariants.
 
 The deterministic complement is `invariant-lint.mjs` (toolkit plugin
-`scripts/`), opt-in per repo via `.invariants.json`: `"extends"` composes
-catalog rule-packs, parameters, and repo-local `rules`.
-`/invariants-init` scaffolds it, vendoring the linter. Run `/selfreview`
-before committing.
+`scripts/`), opt-in via `.invariants.json`: `"extends"` composes rule-packs,
+parameters, and repo-local `rules`. `/invariants-init` scaffolds and
+vendors it. Run `/selfreview` before committing.
 
 ## Part A — Adversarial self-review checklist (complete BEFORE committing)
 
@@ -18,8 +17,8 @@ somewhere reviewable):
 
 1. **Invariants and enforcement paths (symmetry).** Enumerate the
    invariants this change must uphold, and for each name EVERY code path
-   that must enforce it — not just the one you touched. N−1 of N paths
-   enforced is zero enforced.
+   enforcing it — not just the one you touched. N−1 of N enforced is zero
+   enforced.
 2. **Hostile inputs.** For every new input, parameter, header, file name, or
    query value: state the hostile value (`../../etc/passwd`, a 10 MB string,
    another tenant's id) and name the exact line rejecting it. "It can't
@@ -40,7 +39,7 @@ somewhere reviewable):
    boundary. Tests encode invariants, not behavior — and assert what the
    code DERIVES, never what it merely spells today. A pinned occurrence
    count (`grep -c … → 21`) breaks on the next legitimate site, costing a
-   review round to prove "stale pin, not regression"; count both sides and
+   round to prove "stale pin, not regression"; count both sides and
    assert equality instead (`reviewer-status-contract.test.sh`, #338).
    Presence checks (0/1) are fine — existence IS derived. Prose quoted from
    a budget-capped file is worst, its spelling contested by design, and a
@@ -53,7 +52,7 @@ somewhere reviewable):
 8. **Unearned defense (subtraction).** For every guard, branch, method,
    DTO, and test added, name the concrete production caller reaching it
    today — a test satisfying only this check doesn't count for the code it
-   calls, and needs no caller but its runner. No caller and reachability
+   calls, and needs no caller but its runner. No caller, reachability
    genuinely absent: cut it. Framework/dispatch reachability or a planned
    dependent's need is unresolved, not absent (ship.md lists these) —
    justify in writing instead. Runs before either review marker, so a cut
