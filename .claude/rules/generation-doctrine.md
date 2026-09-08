@@ -49,6 +49,7 @@ somewhere reviewable):
 7. **Meta-review for rule/config-as-code.** When the diff modifies invariant
    rules or the linter, the rule IS the code — apply items 1–6 to it. A
    bypassable rule manufactures false confidence in every review.
+   `/selfreview`'s `<invariantreview>` section has the full checklist.
 8. **Unearned defense (subtraction).** For every guard, branch, method,
    DTO, and test added, name the concrete production caller reaching it
    today — a test satisfying only this check doesn't count for the code it
