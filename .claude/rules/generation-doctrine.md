@@ -62,8 +62,9 @@ somewhere reviewable):
    calls, and needs no caller but its runner. No caller, reachability
    genuinely absent: cut it. Framework/dispatch reachability or a planned
    dependent's need is unresolved, not absent (ship.md lists these) —
-   justify in writing instead. Runs before either review marker, so a cut
-   can't stale one.
+   justify in writing instead. Runs at /ship 1b2 before either review marker,
+   and again at 1d2 against the file's accumulated total — what the review
+   loop itself added, where a cut does stale both markers and is worth it.
 
 A change is not ready to commit until every item above has an answer.
 
