@@ -44,7 +44,14 @@ somewhere reviewable):
    Presence checks (0/1) are fine — existence IS derived. Prose quoted from
    a budget-capped file is worst, its spelling contested by design, and a
    stale pin must fail loudly ("the literal is gone, this test exercises
-   nothing"), never rot into a silent no-op.
+   nothing"), never rot into a silent no-op. Then WATCH IT FAIL: mutate
+   the guard it names — flip the comparison, loosen the exact match to a
+   substring, change the returned code — and confirm THAT test reddens,
+   then restore and confirm green. A suite that reddens elsewhere proves
+   nothing about this test. Name the mutation and the test it killed, or
+   say the mutant SURVIVED and what you did about it — a survivor is the
+   finding, not a step you skipped. Cheap and high-yield: three such
+   mutations of a reviewed 294-check suite here all survived (#405).
 7. **Meta-review for rule/config-as-code.** When the diff modifies invariant
    rules or the linter, the rule IS the code — apply items 1–6 to it. A
    bypassable rule manufactures false confidence in every review.
