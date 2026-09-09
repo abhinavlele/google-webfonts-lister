@@ -18,7 +18,10 @@ somewhere reviewable):
 1. **Invariants and enforcement paths (symmetry).** Enumerate the
    invariants this change must uphold, and for each name EVERY code path
    enforcing it — not just the one you touched. N−1 of N enforced is zero
-   enforced.
+   enforced. A check compared against a moving ref (`origin/<default>`,
+   `HEAD~`, a fetched ref) must say what it still asserts once THIS branch
+   merges and BECOMES that ref; if nothing, it passes forever — pin a
+   committed fixture or a resolved OID (#405).
 2. **Hostile inputs.** For every new input, parameter, header, file name, or
    query value: state the hostile value (`../../etc/passwd`, a 10 MB string,
    another tenant's id) and name the exact line rejecting it. "It can't
