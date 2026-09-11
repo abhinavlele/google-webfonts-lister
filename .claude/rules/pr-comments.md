@@ -62,6 +62,23 @@ STOP: pick the one thing that's not in the diff and cut the rest.
 - Multi-paragraph polished essays where 2 sentences would do.
 - Exhaustive bullet enumerations of what changed.
 
+## Jargon density
+
+Use the domain's vocabulary — the reader owns it, and glossing a term the
+team says daily ("Rego (OPA's rule language)") reads like documentation,
+not a PR. What loses the reader is DENSITY: coined hyphenated compounds
+stacked into one noun phrase, like "row-predicate, column-action, and
+object-rule access controls". Say what the code does, not what its parts
+are named; one unfamiliar term per sentence.
+
+Process narration is the other half of the same problem. CI check names,
+how many review rounds ran, which reviewer deferred a finding to which
+round, which automated reviewer was skipped and why — the checks tab, the
+ticket, and the commit log already carry all of it, and none of it is what
+the reader opened the PR to learn. Cut the machinery, not the consequence:
+a hard merge or deploy dependency, or a deferred fix the reader must act
+on, still earns the sentence the caps above already allow it.
+
 ## Required shape
 
 - Short prose. 1-3 sentences per thread is normal.
