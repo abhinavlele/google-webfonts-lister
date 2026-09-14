@@ -1,3 +1,15 @@
+---
+paths:
+  - "**/*.tsx"
+  - "**/*.jsx"
+  - "**/*.vue"
+  - "**/*.svelte"
+  - "**/*.html"
+  - "**/*.erb"
+  - "**/*.css"
+  - "**/*.scss"
+---
+
 # UX Doctrine — Interface Self-Review
 
 Standing doctrine for every change that touches a user interface, in every

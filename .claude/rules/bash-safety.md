@@ -1,5 +1,24 @@
 # Bash Command Safety
 
+## Token cost model
+
+Everything below is measured on wall-clock; this is the token-cost
+complement, so a habit's cost can be judged rather than guessed. A cached
+token is written once at 1.25x its size, then re-read on every later
+request at 0.1x. Total cost multiplier over a session of N requests is
+roughly `1.25 + 0.1*N`: 2.5x in a 12-request session, 184x in an
+1,827-request one. Re-derive these numbers rather than trust them, with
+`scripts/token-report.py` (#438) over `~/.claude/projects/**/*.jsonl`.
+
+Consequences: anything added to the always-loaded prefix (CLAUDE.md,
+always-loaded rules/) is the most expensive token in the system — every
+request pays its cache-read cost whether or not that request needs it.
+Tool output added early in a session is far more expensive than the same
+output added late, since it gets re-read by every subsequent request.
+Ending a session is the only action that removes accumulated context —
+trimming mid-session only stops the growth, it doesn't refund what's
+already cached.
+
 ## Safe Patterns
 - Redirect stderr: `command 2>&1 | head -20`
 - Check before delete: `ls -la target_dir/` then `rm specific_file.txt`

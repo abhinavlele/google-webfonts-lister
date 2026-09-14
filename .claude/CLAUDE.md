@@ -1,7 +1,7 @@
 # Rules
 
 1. Orchestrator agent for non-trivial tasks
-2. **Parallel tool calls for independent operations** — reads, greps, checks, all in ONE message. Never busy-wait (`sleep`/`pgrep` loops) — background it, the harness re-invokes. Read/Grep/Glob over `cat`/`grep`/`ls`; bound reads of files you didn't write.
+2. **Parallel tool calls for independent operations** — reads, greps, checks, all in ONE message. Never busy-wait (`sleep`/`pgrep` loops) — background it, the harness re-invokes. Read/Grep/Glob over `cat`/`grep`/`ls`; bound reads of files you didn't write. Token cost model: `rules/bash-safety.md`.
 3. Use `gh` for all GitHub operations
 4. No AI attribution anywhere (commits, PRs, comments, code, no Co-Authored-By)
 5. Prefer established libraries over custom code
@@ -25,12 +25,12 @@
 
 Review, PR-writer, codex-config-bypass, and CI gates — hook-enforced `PreToolUse` checks on git/gh/env operations. Detail in `rules/enforced-gates.md`.
 
-## Doctrines (always loaded)
+## Doctrines
 
-- **Generation** `rules/generation-doctrine.md` — enforced. Repos with `.invariants.json` also run `invariant_gate.py` → `invariant-lint.mjs` on push/PR, blocking HARD findings. Scaffold `/invariants-init`. Bypass: `SKIP_INVARIANT_GATE=1`.
-- **UX** `rules/ux-doctrine.md` — enforced; `a11y` + `design-system` packs via `/invariants-init`.
-- **Autoresearch** `rules/autoresearch-suggest.md` — when to offer `/autoresearch` vs hand-tuning.
-- **Review scope discipline** `rules/review-scope-discipline.md` — fix in-scope inline, file the rest.
+- **Generation** `rules/generation-doctrine.md` — always loaded, enforced. Repos with `.invariants.json` also run `invariant_gate.py` → `invariant-lint.mjs` on push/PR, blocking HARD findings. Scaffold `/invariants-init`. Bypass: `SKIP_INVARIANT_GATE=1`.
+- **UX** `rules/ux-doctrine.md` — loaded on UI paths (`paths:` frontmatter), enforced; `a11y` + `design-system` packs via `/invariants-init`.
+- **Autoresearch** — when to offer `/autoresearch` vs hand-tuning is now the `autoresearch` skill's own trigger; no standing rule.
+- **Review scope discipline** `rules/review-scope-discipline.md` — loaded on review-loop paths, fix in-scope inline, file the rest.
 
 ## Sub-agent Preamble
 
