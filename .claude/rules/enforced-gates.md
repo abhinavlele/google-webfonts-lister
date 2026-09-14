@@ -20,6 +20,10 @@ Why two gates: memory `feedback_codex_alone_missed_jmaredia_findings.md`, `feedb
 
 `codex_config_bypass_gate.py` blocks any Bash tool call that assigns `CODEX_ALLOW_REPO_CONFIG` — the flag that disarms `codex-isolated.sh`'s repo-config guard (a repo-local `.codex/config.toml` registers MCP servers, i.e. arbitrary commands, while the reviewer runs `workspace-write` and commits signed fixes). No agent is exempt and there is **no bypass token**: a bypass for a bypass is not a gate. Operator route: `export` it in the shell that starts Claude Code — inherited, never named in a command. The wrapper refuses only when BOTH halves hold: codex would actually load that file (the operator's own `~/.codex/config.toml` marks the exact path `trust_level = "trusted"` — without it codex never opens a repo-local config, verified) AND the branch under review added or modified it relative to its merge base. An untrusted repo, or a config the base branch already carried unchanged, is allowed by the wrapper itself (#353) and needs no flag.
 
+## Read Budget Gate
+
+`read_budget_gate.py` blocks a `Read` of a file over 500 lines unless it passes `limit` <= 500, or this session wrote the file (Write/Edit are recorded per session). Fail-OPEN on anything undecidable. Bypass: `SKIP_READ_BUDGET_GATE=1` exported before starting Claude Code.
+
 ## CI Gate
 
 `ci_gate.py` blocks `gh pr merge` while CI is failing/pending/cancelled. Allows on pass/skip/none, or `--auto` (then blocks only on already-failed). Fail-OPEN when indeterminate. Bypass: `SKIP_CI_GATE=1`.
