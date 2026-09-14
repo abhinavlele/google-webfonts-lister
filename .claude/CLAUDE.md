@@ -1,6 +1,6 @@
 # Rules
 
-1. Orchestrator agent for non-trivial tasks
+1. Deliberate before delegating non-trivial tasks to the specific agent needed
 2. **Parallel tool calls for independent operations** — reads, greps, checks, all in ONE message. Never busy-wait (`sleep`/`pgrep` loops) — background it, the harness re-invokes. Read/Grep/Glob over `cat`/`grep`/`ls`; bound reads of files you didn't write. Token cost model: `rules/bash-safety.md`.
 3. Use `gh` for all GitHub operations
 4. No AI attribution anywhere (commits, PRs, comments, code, no Co-Authored-By)
